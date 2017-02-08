@@ -29,6 +29,7 @@
 # STM32F429IDISCOVERY=1
 # STM32F401CDISCOVERY=1
 # MICROBIT=1
+# NGBEACON=1
 # NRF51TAG=1
 # NRF51822DK=1
 # NRF52832DK=1            # Ultra low power BLE (bluetooth low energy) enabled SoC. Arm Cortex-M4f processor. With NFC (near field communication).
@@ -455,6 +456,15 @@ BOARD=MICROBIT
 OPTIMIZEFLAGS+=-Os
 USE_BLUETOOTH=1
 USE_GRAPHICS=1
+
+else ifdef NGBEACON
+EMBEDDED=1
+SAVE_ON_FLASH=1
+# Save on flash, but we still want the debugger and tab complete
+DEFINES+=-DUSE_DEBUGGER -DUSE_TAB_COMPLETE
+BOARD=NGBEACON
+OPTIMIZEFLAGS+=-Os
+USE_BLUETOOTH=1
 
 else ifdef DO003
 EMBEDDED=1
@@ -1051,6 +1061,11 @@ endif
 ifeq ($(BOARD),MICROBIT)
   INCLUDE += -I$(ROOT)/libs/microbit
   WRAPPERSOURCES += libs/microbit/jswrap_microbit.c
+endif
+
+ifeq ($(BOARD),NGBEACON)
+  INCLUDE += -I$(ROOT)/libs/ngbeacon
+  WRAPPERSOURCES += libs/ngbeacon/jswrap_ngbeacon.c
 endif
 
 ifeq ($(BOARD),PUCKJS)
