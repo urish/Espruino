@@ -411,13 +411,21 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 
       case BLE_EVT_TX_COMPLETE:
         // BLE transmit finished - reset flags
-        //TODO: probably want to figure out *which one* finished?
-        bleStatus &= ~BLE_IS_SENDING;
-        if (bleStatus & BLE_IS_SENDING_HID) {
-          bleStatus &= ~BLE_IS_SENDING_HID;
-          jsiQueueObjectCallbacks(execInfo.root, BLE_HID_SENT_EVENT, 0, 0);
-          jsvObjectSetChild(execInfo.root, BLE_HID_SENT_EVENT, 0); // fire only once
-          jshHadEvent();
+#if CENTRAL_LINK_COUNT>0
+        if (p_ble_evt->evt.common_evt.conn_handle == m_central_conn_handle) {
+          if (bleInTask(BLETASK_CHARACTERISTIC_WRITE))
+            bleCompleteTaskSuccess(BLETASK_CHARACTERISTIC_WRITE, 0);
+        }
+#endif
+        if (p_ble_evt->evt.common_evt.conn_handle == m_conn_handle) {
+          //TODO: probably want to figure out *which one* finished?
+          bleStatus &= ~BLE_IS_SENDING;
+          if (bleStatus & BLE_IS_SENDING_HID) {
+            bleStatus &= ~BLE_IS_SENDING_HID;
+            jsiQueueObjectCallbacks(execInfo.root, BLE_HID_SENT_EVENT, 0, 0);
+            jsvObjectSetChild(execInfo.root, BLE_HID_SENT_EVENT, 0); // fire only once
+            jshHadEvent();
+          }
         }
         break;
 
@@ -529,6 +537,17 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
               jsvObjectSetChildAndUnLock(o,"uuid", bleUUIDToStr(p_chr->uuid));
               jsvObjectSetChildAndUnLock(o,"handle_value", jsvNewFromInteger(p_chr->handle_value));
               jsvObjectSetChildAndUnLock(o,"handle_decl", jsvNewFromInteger(p_chr->handle_decl));
+              JsVar *p = jsvNewObject();
+              if (p) {
+                jsvObjectSetChildAndUnLock(p,"broadcast",jsvNewFromBool(p_chr->char_props.broadcast));
+                jsvObjectSetChildAndUnLock(p,"read",jsvNewFromBool(p_chr->char_props.read));
+                jsvObjectSetChildAndUnLock(p,"writeWithoutResponse",jsvNewFromBool(p_chr->char_props.write_wo_resp));
+                jsvObjectSetChildAndUnLock(p,"write",jsvNewFromBool(p_chr->char_props.write));
+                jsvObjectSetChildAndUnLock(p,"notify",jsvNewFromBool(p_chr->char_props.notify));
+                jsvObjectSetChildAndUnLock(p,"indicate",jsvNewFromBool(p_chr->char_props.indicate));
+                jsvObjectSetChildAndUnLock(p,"authenticatedSignedWrites",jsvNewFromBool(p_chr->char_props.auth_signed_wr));
+                jsvObjectSetChildAndUnLock(o,"properties", p);
+              }
               // char_props?
               jsvArrayPushAndUnLock(bleTaskInfo, o);
             }
@@ -562,9 +581,23 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
         }
         break;
       }
-      case BLE_GATTC_EVT_DESC_DISC_RSP:
-        jsiConsolePrintf("DESC\n");
+      case BLE_GATTC_EVT_DESC_DISC_RSP: {
+        // trigger this with sd_ble_gattc_descriptors_discover(conn_handle, &handle_range);
+       /* ble_gattc_evt_desc_disc_rsp_t * p_desc_disc_rsp_evt = &p_ble_evt->evt.gattc_evt.params.desc_disc_rsp;
+        if (p_ble_evt->evt.gattc_evt.gatt_status == BLE_GATT_STATUS_SUCCESS) {
+          // The descriptor was found at the peer.
+          // If the descriptor was a CCCD, then the cccd_handle needs to be populated.
+          uint32_t i;
+          // Loop through all the descriptors to find the CCCD.
+          for (i = 0; i < p_desc_disc_rsp_evt->count; i++) {
+            if (p_desc_disc_rsp_evt->descs[i].uuid.uuid ==
+                BLE_UUID_DESCRIPTOR_CLIENT_CHAR_CONFIG) {
+                  cccd_handle = p_desc_disc_rsp_evt->descs[i].handle;
+            }
+          }
+        }*/
         break;
+      }
 
       case BLE_GATTC_EVT_READ_RSP: if (bleInTask(BLETASK_CHARACTERISTIC_READ)) {
         ble_gattc_evt_read_rsp_t *p_read = &p_ble_evt->evt.gattc_evt.params.read_rsp;
@@ -1412,9 +1445,20 @@ void jsble_central_characteristicWrite(JsVar *characteristic, char *dataPtr, siz
     return bleCompleteTaskFailAndUnLock(BLETASK_CHARACTERISTIC_WRITE, jsvNewFromString("Not connected"));
 
   uint16_t handle = jsvGetIntegerAndUnLock(jsvObjectGetChild(characteristic, "handle_value", 0));
+  bool writeWithoutResponse = false;
+  JsVar *properties = jsvObjectGetChild(characteristic, "properties", 0);
+  if (properties) {
+    writeWithoutResponse = jsvGetBoolAndUnLock(jsvObjectGetChild(properties, "writeWithoutResponse", 0));
+    jsvUnLock(properties);
+  }
+
+
   ble_gattc_write_params_t write_params;
   memset(&write_params, 0, sizeof(write_params));
-  write_params.write_op = BLE_GATT_OP_WRITE_REQ;
+  if (writeWithoutResponse)
+    write_params.write_op = BLE_GATT_OP_WRITE_CMD; // write without response
+  else
+    write_params.write_op = BLE_GATT_OP_WRITE_REQ; // write with response
   // BLE_GATT_OP_WRITE_REQ ===> BLE_GATTC_EVT_WRITE_RSP (write with response)
   // or BLE_GATT_OP_WRITE_CMD ===> BLE_EVT_TX_COMPLETE (simple write)
   // or send multiple BLE_GATT_OP_PREP_WRITE_REQ,...,BLE_GATT_OP_EXEC_WRITE_REQ (with offset + 18 bytes in each for 'long' write)
