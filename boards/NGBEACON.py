@@ -22,7 +22,7 @@ info = {
  'default_console_tx' : "D9",
  'default_console_rx' : "D8",
  'default_console_baudrate' : "9600",
- 'variables' : 300,
+ 'variables' : 250,
  'binary_name' : 'espruino_%v_ngbeacon.bin',
  'build' : {
   'defines' : [
@@ -54,8 +54,7 @@ chip = {
 };
 
 devices = {
-  'LED1' : { 'pin' : 'D17', 'inverted' : True },
-  'BTN1' : { 'pin' : 'D19', 'inverted' : True, 'pinstate' : 'IN_PULLUP'},
+  'BTN1' : { 'pin' : 'D17', 'inverted' : True, 'pinstate' : 'IN_PULLUP'},
   'RX_PIN_NUMBER' : { 'pin' : 'D8'},
   'TX_PIN_NUMBER' : { 'pin' : 'D9'},
   'CTS_PIN_NUMBER' : { 'pin' : 'D10'},
