@@ -22,7 +22,8 @@ info = {
  'default_console_tx' : "D9",
  'default_console_rx' : "D8",
  'default_console_baudrate' : "9600",
- 'variables' : 250,
+ 'variables' : 2000,
+ # 'bootloader' : 1,
  'binary_name' : 'espruino_%v_ngbeacon.bin',
  'build' : {
   'defines' : [
@@ -32,29 +33,32 @@ info = {
 };
 
 chip = {
-  'part' : "NRF51822",
-  'family' : "NRF51",
+  'part' : "NRF52832",
+  'family' : "NRF52",
   'package' : "QFN48",
-  'ram' : 16,
-  'flash' : 256,
-  'speed' : 16,
+  'ram' : 64,
+  'flash' : 512,
+  'speed' : 64,
   'usart' : 1,
-  'spi' : 1,
-  'i2c' : 1,
-  'adc' : 0,
+  'spi' : 3,
+  'i2c' : 2,
+  'adc' : 1,
   'dac' : 0,
    # If using DFU bootloader, it sits at 0x3C000 - 0x40000 (0x40000 is end of flash)
    # Might want to change 256 -> 240 in the code below
   'saved_code' : {
-    'address' : ((256 - 3) * 1024),
-    'page_size' : 1024,
+    'address' : ((120 - 3) * 4096), # Bootloader takes pages 120-127
+    'page_size' : 4096,
     'pages' : 3,
-    'flash_available' : (256 - 108 - 3)
+    'flash_available' : 512 - ((31 + 8 + 3)*4) # Softdevice uses 31 pages of flash, bootloader 8, code 3. Each page is 4 kb. 
   }
 };
 
 devices = {
   'BTN1' : { 'pin' : 'D17', 'inverted' : True, 'pinstate' : 'IN_PULLUP'},
+  'LED1':  { 'pin' : 'D16' },
+  'LED2':  { 'pin' : 'D15' },
+  'LED3':  { 'pin' : 'D14' },
   'RX_PIN_NUMBER' : { 'pin' : 'D8'},
   'TX_PIN_NUMBER' : { 'pin' : 'D9'},
   'CTS_PIN_NUMBER' : { 'pin' : 'D10'},
@@ -71,28 +75,4 @@ board["_css"] = """
 
 def get_pins():
   pins = pinutils.generate_pins(0,31) # 32 General Purpose I/O Pins.
-  pinutils.findpin(pins, "PD27", True)["functions"]["XL1"]=0;
-  pinutils.findpin(pins, "PD26", True)["functions"]["XL2"]=0;
-  pinutils.findpin(pins, "PD8", True)["functions"]["RTS"]=0;
-  pinutils.findpin(pins, "PD9", True)["functions"]["TXD"]=0;
-  pinutils.findpin(pins, "PD10", True)["functions"]["CTS"]=0;
-  pinutils.findpin(pins, "PD11", True)["functions"]["RXD"]=0;
-  pinutils.findpin(pins, "PD17", True)["functions"]["Button_1"]=0;
-  pinutils.findpin(pins, "PD18", True)["functions"]["Button_2"]=0;
-  pinutils.findpin(pins, "PD19", True)["functions"]["Button_3"]=0;
-  pinutils.findpin(pins, "PD20", True)["functions"]["Button_4"]=0;
-  pinutils.findpin(pins, "PD21", True)["functions"]["LED_1"]=0;
-  pinutils.findpin(pins, "PD22", True)["functions"]["LED_2"]=0;
-  pinutils.findpin(pins, "PD23", True)["functions"]["LED_3"]=0;
-  pinutils.findpin(pins, "PD24", True)["functions"]["LED_4"]=0;
-
-  pinutils.findpin(pins, "PD0", True)["functions"]["ADC1_IN1"]=0;
-  pinutils.findpin(pins, "PD1", True)["functions"]["ADC1_IN2"]=0;
-  pinutils.findpin(pins, "PD2", True)["functions"]["ADC1_IN3"]=0;
-  pinutils.findpin(pins, "PD3", True)["functions"]["ADC1_IN4"]=0;
-  pinutils.findpin(pins, "PD4", True)["functions"]["ADC1_IN5"]=0;
-  pinutils.findpin(pins, "PD5", True)["functions"]["ADC1_IN6"]=0;
-  pinutils.findpin(pins, "PD6", True)["functions"]["ADC1_IN7"]=0;
-
-  #The boot/reset button will function as a reset button in normal operation. Pin reset on PD21 needs to be enabled on the nRF52832 device for this to work.
   return pins
