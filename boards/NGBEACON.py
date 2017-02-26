@@ -23,7 +23,7 @@ info = {
  'default_console_rx' : "D8",
  'default_console_baudrate' : "9600",
  'variables' : 2000,
- # 'bootloader' : 1,
+ 'bootloader' : 1,
  'binary_name' : 'espruino_%v_ngbeacon.bin',
  'build' : {
   'defines' : [
