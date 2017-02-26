@@ -61,7 +61,7 @@ void jswrap_ngbeacon_init() {
     "type" : "staticmethod",
     "class" : "ngbeacon",
     "name" : "temperature",
-    "ifdef" : "NRF51",
+    "ifdef" : "NGBEACON",
     "generate" : "jswrap_ngbeacon_temperature",
     "return" : ["float", "Temperature reading value, in celcius" ]
 }
@@ -75,7 +75,7 @@ JsVarFloat jswrap_ngbeacon_temperature() {
     "type" : "staticmethod",
     "class" : "ngbeacon",
     "name" : "humidity",
-    "ifdef" : "NRF51",
+    "ifdef" : "NGBEACON",
     "generate" : "jswrap_ngbeacon_humidity",
     "return" : ["float", "Humidity percentage" ]
 }
