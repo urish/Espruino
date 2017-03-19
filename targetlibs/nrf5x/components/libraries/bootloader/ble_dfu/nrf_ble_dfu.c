@@ -30,7 +30,7 @@
 #include "platform_config.h"
 #include "nrf_gpio.h"
 
-#define DEVICE_NAME                          "DfuTarg"                                              /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                          "NgDfu"                                                /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                    "NordicSemiconductor"                                  /**< Manufacturer. Will be passed to Device Information Service. */
 
 #define MIN_CONN_INTERVAL                    (uint16_t)(MSEC_TO_UNITS(15, UNIT_1_25_MS))            /**< Minimum acceptable connection interval. */
