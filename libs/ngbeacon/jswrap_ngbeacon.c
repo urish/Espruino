@@ -52,8 +52,8 @@ void jswrap_ngbeacon_init() {
   // enable I2C (for sensors)
   JshI2CInfo inf;
   jshI2CInitInfo(&inf);
-  inf.pinSDA = JSH_PORTD_OFFSET+28; // 'D28'
-  inf.pinSCL = JSH_PORTD_OFFSET+29; // 'D29'
+  inf.pinSDA = JSH_PORTD_OFFSET+29; // 'D29'
+  inf.pinSCL = JSH_PORTD_OFFSET+30; // 'D30'
   jshI2CSetup(EV_I2C1, &inf);
 }
 
