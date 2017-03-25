@@ -80,6 +80,12 @@ static void buttons_init(void)
 
 // Override Weak version
 bool nrf_dfu_enter_check(void) {
+    // Check if user asked to reboot into DFU
+    if (NRF_POWER->GPREGRET & 0x1) {
+        NRF_POWER->GPREGRET &= ~0x1;
+        return true;
+    }
+
     bool dfu_start = (nrf_gpio_pin_read(BOOTLOADER_BUTTON) == BOOTLOADER_BUTTON_ONSTATE) ? true: false;
 
     // If button is held down for 3 seconds, don't start bootloader.

@@ -16,3 +16,4 @@
 void jswrap_ngbeacon_init();
 JsVarFloat jswrap_ngbeacon_temperature();
 JsVarFloat jswrap_ngbeacon_humidity();
+void jswrap_ngbeacon_dfu();

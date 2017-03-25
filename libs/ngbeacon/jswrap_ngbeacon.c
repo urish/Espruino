@@ -18,6 +18,8 @@
 #include "jswrap_ngbeacon.h"
 #include "jshardware.h"
 
+#include "nrf_soc.h"
+
 #define SHT2x_ADDRESS 0x40
 #define SHT2X_POLYNOMIAL 0x131
 
@@ -83,4 +85,17 @@ JsVarFloat jswrap_ngbeacon_temperature() {
 JsVarFloat jswrap_ngbeacon_humidity() {
   float value = readShtSensor(0xe5);
   return -6.0 + 125.0 / 65536.0 * value;
+}
+
+/*JSON{
+    "type" : "staticmethod",
+    "class" : "ngbeacon",
+    "name" : "dfu",
+    "ifdef" : "NGBEACON",
+    "generate" : "jswrap_ngbeacon_dfu"
+}
+*/
+void jswrap_ngbeacon_dfu() {
+  sd_power_gpregret_set(0, 0x1);
+  NVIC_SystemReset();
 }
