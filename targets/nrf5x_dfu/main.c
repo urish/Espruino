@@ -78,9 +78,12 @@ static void buttons_init(void)
 
 }
 
+int savedregister = 0xff;
+
 // Override Weak version
 bool nrf_dfu_enter_check(void) {
     // Check if user asked to reboot into DFU
+savedregister = NRF_POWER->GPREGRET;
     if (NRF_POWER->GPREGRET & 0x1) {
         NRF_POWER->GPREGRET &= ~0x1;
         return true;

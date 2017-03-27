@@ -716,6 +716,7 @@ static uint32_t gap_address_change(void)
  * @details   This function will setup all the necessary GAP (Generic Access Profile) parameters of
  *            the device. It also sets the permissions and appearance.
  */
+ extern int savedregister;
 static uint32_t gap_params_init(void)
 {
     uint32_t                err_code;
@@ -728,9 +729,24 @@ static uint32_t gap_params_init(void)
     err_code = gap_address_change();
     VERIFY_SUCCESS(err_code);
 
+    static char deviceInfo[32] = {0};
+    char *hex = "0123456789ABCDEF";
+    int i = 0;
+    deviceInfo[i++] = 'R';
+    deviceInfo[i++] = 'E';
+    deviceInfo[i++] = 'T';
+    deviceInfo[i++] = hex[(savedregister >> 28) & 0xf];
+    deviceInfo[i++] = hex[(savedregister >> 24) & 0xf];
+    deviceInfo[i++] = hex[(savedregister >> 20) & 0xf];
+    deviceInfo[i++] = hex[(savedregister >> 16) & 0xf];
+    deviceInfo[i++] = hex[(savedregister >> 12) & 0xf];
+    deviceInfo[i++] = hex[(savedregister >> 8) & 0xf];
+    deviceInfo[i++] = hex[(savedregister >> 4) & 0xf];
+    deviceInfo[i++] = hex[(savedregister >> 0) & 0xf];
+    deviceInfo[i] = 0;
     err_code = sd_ble_gap_device_name_set(&sec_mode,
-                                          (const uint8_t *)DEVICE_NAME,
-                                          strlen(DEVICE_NAME));
+                                          (const uint8_t *)deviceInfo,
+                                          strlen(deviceInfo));
     VERIFY_SUCCESS(err_code);
 
     gap_conn_params.min_conn_interval = MIN_CONN_INTERVAL;
