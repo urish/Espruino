@@ -795,6 +795,8 @@ static void gap_params_init() {
     strcpy(deviceName,"Puck.js");
 #elif defined(RUUVITAG)
     strcpy(deviceName,"RuuviTag");
+#elif defined(NGBEACON)
+    strcpy(deviceName,"ng-beacon");
 #else
     strcpy(deviceName,"Espruino "PC_BOARD_ID);
 #endif
