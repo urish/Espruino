@@ -55,6 +55,9 @@ static pm_peer_id_t m_peer_id;                              /**< Device referenc
 static pm_peer_id_t   m_whitelist_peers[BLE_GAP_WHITELIST_ADDR_MAX_COUNT];  /**< List of peers currently in the whitelist. */
 static uint32_t       m_whitelist_peer_cnt;                                 /**< Number of peers currently in the whitelist. */
 static bool           m_is_wl_changed;                                      /**< Indicates if the whitelist has been changed since last time it has been updated in the Peer Manager. */
+// needed for peer_manager_init so we can smoothly upgrade from pre 1v92 firmwares
+#include "fds_internal_defs.h"
+#include "fstorage_internal_defs.h"
 #endif
 
 // -----------------------------------------------------------------------------------
@@ -311,6 +314,9 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
           if (bleStatus & BLE_IS_RSSI_SCANNING) // attempt to restart RSSI scan
             sd_ble_gap_rssi_start(m_conn_handle, 0, 0);
           bleStatus &= ~BLE_IS_SENDING; // reset state - just in case
+#if BLE_HIDS_ENABLED
+          bleStatus &= ~BLE_IS_SENDING_HID;
+#endif
           bleStatus &= ~BLE_IS_ADVERTISING; // we're not advertising now we're connected
           if (!jsiIsConsoleDeviceForced() && (bleStatus & BLE_NUS_INITED))
             jsiSetConsoleDevice(EV_BLUETOOTH, false);
@@ -1165,6 +1171,18 @@ static void peer_manager_init(bool erase_bonds) {
   if (bleStatus & BLE_PM_INITIALISED) return;
   bleStatus |= BLE_PM_INITIALISED;
 
+  /* Deal with what happens if we had saved code in pages already.
+  This happens if we had a pre-1v92 firmware with saved code
+  and then updated to something with peer manager so the pages
+  got swapped around */
+  uint32_t *magicWord = ((uint32_t *)FS_PAGE_END_ADDR)-1;
+  if (FLASH_MAGIC == *magicWord) {
+    int i;
+    for (i=1;i<=FDS_PHY_PAGES;i++)
+      jshFlashErasePage(FS_PAGE_END_ADDR - i*FS_PAGE_SIZE);
+  }
+
+
   ble_gap_sec_params_t sec_param;
   ret_code_t           err_code;
 
@@ -1485,7 +1503,6 @@ void jsble_advertising_stop() {
 
 /** Initialise the BLE stack */
  void jsble_init() {
-
    ble_stack_init();
 #if PEER_MANAGER_ENABLED
    peer_manager_init(true /*erase_bonds*/);
@@ -1754,10 +1771,14 @@ void jsble_send_hid_input_report(uint8_t *data, int length) {
     jsExceptionHere(JSET_ERROR, "BLE HID not enabled");
     return;
   }
+  if (!jsble_has_simple_connection()) {
+    jsExceptionHere(JSET_ERROR, "Not connected!");
+    return;
+  }
   if (bleStatus & BLE_IS_SENDING_HID) {
-     jsExceptionHere(JSET_ERROR, "BLE HID already sending");
-     return;
-   }
+    jsExceptionHere(JSET_ERROR, "BLE HID already sending");
+    return;
+  }  
   if (length > HID_KEYS_MAX_LEN) {
     jsExceptionHere(JSET_ERROR, "BLE HID report too long - max length = %d\n", HID_KEYS_MAX_LEN);
     return;
@@ -1776,7 +1797,6 @@ void jsble_send_hid_input_report(uint8_t *data, int length) {
   }
   if (!jsble_check_error(err_code))
     bleStatus |= BLE_IS_SENDING_HID;
-  return;
 }
 #endif
 
