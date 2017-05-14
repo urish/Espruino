@@ -189,7 +189,15 @@ void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info) {
 
 /// Function for handling errors from the Connection Parameters module.
 static void conn_params_error_handler(uint32_t nrf_error) {
-    APP_ERROR_HANDLER(nrf_error);
+  /* connection parameters module can produce this if the connection
+   * is disconnected at just the right point while it is trying to
+   * negotiate connection parameters. Ignore it, since we don't
+   * want it to be able to reboot the device!
+   */
+  if (nrf_error == NRF_ERROR_INVALID_STATE)
+    return;
+
+  APP_ERROR_HANDLER(nrf_error);
 }
 
 static void service_error_handler(uint32_t nrf_error) {
@@ -285,6 +293,8 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
     switch (p_ble_evt->header.evt_id) {
       case BLE_GAP_EVT_TIMEOUT:
 #if CENTRAL_LINK_COUNT>0
+        if (bleInTask(BLETASK_BONDING)) // BLE_GAP_TIMEOUT_SRC_SECURITY_REQUEST ?
+          bleCompleteTaskFailAndUnLock(BLETASK_BONDING, jsvNewFromString("Connection Timeout"));
         if (bleInTask(BLETASK_CONNECT)) {
           // timeout!
           bleCompleteTaskFailAndUnLock(BLETASK_CONNECT, jsvNewFromString("Connection Timeout"));
@@ -354,6 +364,8 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 
 #if CENTRAL_LINK_COUNT>0
         if (m_central_conn_handle == p_ble_evt->evt.gap_evt.conn_handle) {
+          if (bleInTask(BLETASK_BONDING))
+            bleCompleteTaskFailAndUnLock(BLETASK_BONDING, jsvNewFromString("Disconnected"));
           JsVar *gattServer = bleGetActiveBluetoothGattServer();
           if (gattServer) {
             JsVar *bluetoothDevice = jsvObjectGetChild(gattServer, "device", 0);
@@ -888,6 +900,8 @@ static void pm_evt_handler(pm_evt_t const * p_evt) {
         } break;
 
         case PM_EVT_CONN_SEC_START:
+          if (bleInTask(BLETASK_BONDING))
+            bleCompleteTaskSuccess(BLETASK_BONDING, 0);
             break;
 
         case PM_EVT_CONN_SEC_SUCCEEDED:
@@ -930,6 +944,8 @@ static void pm_evt_handler(pm_evt_t const * p_evt) {
 
         case PM_EVT_CONN_SEC_FAILED:
         {
+          if (bleInTask(BLETASK_BONDING))
+            bleCompleteTaskFailAndUnLock(BLETASK_BONDING, jsvNewFromString("Securing failed"));
             /** In some cases, when securing fails, it can be restarted directly. Sometimes it can
              *  be restarted, but only after changing some Security Parameters. Sometimes, it cannot
              *  be restarted until the link is disconnected and reconnected. Sometimes it is
@@ -1196,7 +1212,7 @@ static void peer_manager_init(bool erase_bonds) {
   if (FLASH_MAGIC == *magicWord) {
     int i;
     for (i=1;i<=FDS_PHY_PAGES;i++)
-      jshFlashErasePage(FS_PAGE_END_ADDR - i*FS_PAGE_SIZE);
+      jshFlashErasePage(((uint32_t)FS_PAGE_END_ADDR) - i*FS_PAGE_SIZE);
   }
 
 
@@ -1488,7 +1504,7 @@ static void advertising_init() {
     options.ble_adv_fast_timeout  = APP_ADV_TIMEOUT_IN_SECONDS;
 
     err_code = ble_advertising_init(&advdata, &scanrsp, &options, on_adv_evt, NULL);
-    APP_ERROR_CHECK(err_code);
+    jsble_check_error(err_code);
 }
 
 // -----------------------------------------------------------------------------------
@@ -1650,6 +1666,7 @@ uint32_t jsble_set_rssi_scan(bool enabled) {
   return err_code;
 }
 
+#if CENTRAL_LINK_COUNT>0
 uint32_t jsble_set_central_rssi_scan(bool enabled) {
   uint32_t err_code = 0;
   if (enabled) {
@@ -1666,6 +1683,7 @@ uint32_t jsble_set_central_rssi_scan(bool enabled) {
   }
   return err_code;
 }
+#endif
 
 /** Actually set the services defined in the 'data' object. Note: we can
  * only do this *once* - so to change it we must reset the softdevice and
@@ -2019,6 +2037,17 @@ void jsble_central_characteristicNotify(JsVar *characteristic, bool enable) {
   if (jsble_check_error(err_code))
     bleCompleteTaskFail(BLETASK_CHARACTERISTIC_NOTIFY, 0);
 }
+
+void jsble_central_startBonding(bool forceRePair) {
+  if (!jsble_has_central_connection())
+      return bleCompleteTaskFailAndUnLock(BLETASK_BONDING, jsvNewFromString("Not connected"));
+
+  uint32_t err_code = pm_conn_secure(m_central_conn_handle, forceRePair);
+  if (jsble_check_error(err_code)) {
+    bleCompleteTaskFail(BLETASK_BONDING, 0);
+  }
+}
+
 #endif // CENTRAL_LINK_COUNT>0
 
 /** TODO: Provide function to remove advertising whitelist on request?

@@ -373,7 +373,10 @@ void jswrap_nrf_bluetooth_restart() {
     "generate" : "jswrap_nrf_bluetooth_getAddress",
     "return" : ["JsVar", "MAC address - a string of the form 'aa:bb:cc:dd:ee:ff'" ]
 }
-Get this device's Bluetooth MAC address
+Get this device's Bluetooth MAC address.
+
+For Puck.js, the last 5 characters of this (eg. `ee:ff`)
+are used in the device's advertised Bluetooth name.
 */
 JsVar *jswrap_nrf_bluetooth_getAddress() {
   uint32_t addr0 =  NRF_FICR->DEVICEADDR[0];
@@ -394,7 +397,10 @@ JsVar *jswrap_nrf_bluetooth_getAddress() {
     "generate" : "jswrap_nrf_bluetooth_getBattery",
     "return" : ["float", "Battery level in volts" ]
 }
-Get the battery level in volts
+Get the battery level in volts (the voltage that the NRF chip is running off of).
+
+This is the battery level of the device itself - it has nothing to with any
+device that might be connected.
 */
 JsVarFloat jswrap_nrf_bluetooth_getBattery() {
   return jshReadVRef();
@@ -539,17 +545,16 @@ void jswrap_nrf_bluetooth_setAdvertising(JsVar *data, JsVar *options) {
     // raw data...
     // Check if it's nested arrays - if so we alternate between advertising types
     bleStatus &= ~(BLE_IS_ADVERTISING_MULTIPLE|BLE_ADVERTISING_MULTIPLE_MASK);
+    JsVar *item = 0;
     if (jsvIsArray(data)) {
-      JsVar *item = jsvGetArrayItem(data, 0);
+      item = jsvGetArrayItem(data, 0);
       if (jsvIsArray(item) || jsvIsArrayBuffer(item)) {
         // nested - enable multiple advertising - start at index 0
         bleStatus |= BLE_IS_ADVERTISING_MULTIPLE;
         // start with the first element
-        jsvUnLock(data);
         data = item;
         item = 0;
-      } else
-        jsvUnLock(item);
+      }
     }
 
     JSV_GET_AS_CHAR_ARRAY(dPtr, dLen, data);
@@ -564,7 +569,8 @@ void jswrap_nrf_bluetooth_setAdvertising(JsVar *data, JsVar *options) {
     jsble_check_error(err_code);
     if (bleChanged && isAdvertising)
       jsble_advertising_start();
-    return; // we're done here now
+    jsvUnLock(item);
+    return; // we're done here now - don't mess with advertising any more
   } else if (jsvIsObject(data)) {
     ble_advdata_service_data_t *service_data = (ble_advdata_service_data_t*)alloca(jsvGetChildren(data)*sizeof(ble_advdata_service_data_t));
     int n = 0;
@@ -737,6 +743,15 @@ NRF.setServices({
   }
 }, { advertise: [ '180D' ] });
 ```
+
+You may specify 128 bit UUIDs to advertise, however you may get a `DATA_SIZE`
+exception because there is insufficient space in the Bluetooth LE advertising
+packet for the 128 bit UART UUID as well as the UUID you specified. In this
+case you can add `uart:false` after the `advertise` element to disable the
+UART, however you then be unable to connect to Puck.js's console via Bluetooth.
+
+If you absolutely require two or more 128 bit UUIDs then you will have to
+specify your own raw advertising data packets with `NRF.setAdvertising`
 
 */
 void jswrap_nrf_bluetooth_setServices(JsVar *data, JsVar *options) {
@@ -1748,6 +1763,56 @@ void jswrap_BluetoothRemoteGATTServer_disconnect(JsVar *parent) {
   }
 #else
   jsExceptionHere(JSET_ERROR, "Unimplemented");
+#endif
+}
+
+/*JSON{
+    "type" : "method",
+    "class" : "BluetoothRemoteGATTServer",
+    "name" : "startBonding",
+    "ifdef" : "NRF52",
+    "generate" : "jswrap_nrf_BluetoothRemoteGATTServer_startBonding",
+    "params" : [
+      ["forceRePair","bool","If the device is already bonded, re-pair it"]
+    ],
+    "return" : ["JsVar", "A Promise that is resolved (or rejected) when the bonding is complete" ]
+}
+Start negotiating bonding (secure communications) with the connected device,
+and return a Promise that is completed on success or failure.
+
+```
+var gatt;
+NRF.requestDevice({ filters: [{ name: 'Puck.js abcd' }] }).then(function(device) {
+  console.log("found device");
+  return device.gatt.connect();
+}).then(function(g) {
+  gatt = g;
+  console.log("connected");
+  return gatt.startBonding();
+}).then(function() {
+  console.log("bonded");
+  gatt.disconnect();
+}).catch(function(e) {
+  console.log("ERROR",e);
+});
+```
+
+**This is not part of the Web Bluetooth Specification.** It has been added
+specifically for Puck.js.
+
+**Note:** This is only available on some devices
+*/
+JsVar *jswrap_nrf_BluetoothRemoteGATTServer_startBonding(JsVar *parent, bool forceRePair) {
+#if CENTRAL_LINK_COUNT>0
+  if (bleNewTask(BLETASK_BONDING, parent/*BluetoothRemoteGATTServer*/)) {
+    JsVar *promise = jsvLockAgainSafe(blePromise);
+    jsble_central_startBonding(forceRePair);
+    return promise;
+  }
+  return 0;
+#else
+  jsExceptionHere(JSET_ERROR, "Unimplemented");
+  return 0;
 #endif
 }
 
