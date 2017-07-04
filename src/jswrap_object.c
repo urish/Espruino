@@ -276,7 +276,7 @@ void jswrap_object_keys_or_property_names_cb(
     int i;
     for (i=0;i<JSH_PIN_COUNT;i++) {
       char buf[10];
-      jshGetPinString(buf, i);
+      jshGetPinString(buf, (Pin)i);
       JsVar *str = jsvNewFromString(buf);
       callback(data, str);
       jsvUnLock(str);
@@ -528,14 +528,14 @@ Set the prototype of the given object - this is like writing
 `object.__proto__ = prototype` but is the 'proper' ES6 way of doing it
  */
 JsVar *jswrap_object_setPrototypeOf(JsVar *object, JsVar *proto) {
-  JsVar *v = jspGetNamedField(object, "__proto__", true);
+  JsVar *v = jsvIsObject(object) ? jspGetNamedField(object, "__proto__", true) : 0;
   if (!jsvIsName(v)) {
-    jsExceptionHere(JSET_TYPEERROR, "Can't extend this object\n");
+    jsExceptionHere(JSET_TYPEERROR, "Can't extend %t\n", v);
   } else {
     jsvSetValueOfName(v, proto);
   }
   jsvUnLock(v);
-  return jsvLockAgain(object);
+  return jsvLockAgainSafe(object);
 }
 
 // --------------------------------------------------------------------------

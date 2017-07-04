@@ -287,6 +287,11 @@ void jshInit() {
   SysTick_Config(0xFFFFFF);
 #endif
 
+#ifndef SAVE_ON_FLASH
+  // Get a random seed to put into rand's random number generator
+  srand(jshGetRandomNumber());
+#endif
+
 #ifdef LED1_PININDEX
   jshPinOutput(LED1_PININDEX, !LED1_ONSTATE);
 #endif
@@ -811,7 +816,10 @@ bool jshIsDeviceInitialised(IOEventFlags device) {
 void uart0_event_handle(app_uart_evt_t * p_event) {
   jshHadEvent();
   if (p_event->evt_type == APP_UART_COMMUNICATION_ERROR) {
-    jshPushIOEvent(IOEVENTFLAGS_SERIAL_TO_SERIAL_STATUS(EV_SERIAL1) | EV_SERIAL_STATUS_FRAMING_ERR, 0);
+    if (p_event->data.error_communication & (UART_ERRORSRC_BREAK_Msk|UART_ERRORSRC_FRAMING_Msk) && jshGetErrorHandlingEnabled(EV_SERIAL1))
+      jshPushIOEvent(IOEVENTFLAGS_SERIAL_TO_SERIAL_STATUS(EV_SERIAL1) | EV_SERIAL_STATUS_FRAMING_ERR, 0);
+    if (p_event->data.error_communication & (UART_ERRORSRC_PARITY_Msk) && jshGetErrorHandlingEnabled(EV_SERIAL1))
+      jshPushIOEvent(IOEVENTFLAGS_SERIAL_TO_SERIAL_STATUS(EV_SERIAL1) | EV_SERIAL_STATUS_PARITY_ERR, 0);
   } else if (p_event->evt_type == APP_UART_TX_EMPTY) {
     int ch = jshGetCharToTransmit(EV_SERIAL1);
     if (ch >= 0) {
@@ -832,6 +840,7 @@ void jshUSARTSetup(IOEventFlags device, JshUSARTInfo *inf) {
     return;
 
   jshSetFlowControlEnabled(device, inf->xOnXOff, inf->pinCTS);
+  jshSetErrorHandlingEnabled(device, inf->errorHandling);
 
   int baud = nrf_utils_get_baud_enum(inf->baudRate);
   if (baud==0)

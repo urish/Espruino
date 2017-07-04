@@ -630,14 +630,18 @@ void ftoa_bounded_extra(JsVarFloat val,char *str, size_t len, int radix, int fra
     }
 #ifndef USE_NO_FLOATS
     if (((fractionalDigits<0) && val>0) || fractionalDigits>0) {
-      if (--len <= 0) { *str=0; return; } // bounds check
-      *(str++)='.';
+      bool hasPt = false;
       val*=radix;
       while (((fractionalDigits<0) && (fractionalDigits>-12) && (val > stopAtError)) || (fractionalDigits > 0)) {
         int v = (int)(val+((fractionalDigits==1) ? 0.4 : 0.00000001) );
         val = (val-v)*radix;
+	if (v==radix) v=radix-1;
+        if (!hasPt) {	
+	  hasPt = true;
+          if (--len <= 0) { *str=0; return; } // bounds check
+          *(str++)='.';
+        }
         if (--len <= 0) { *str=0; return; } // bounds check
-        if (v==radix) v=radix-1;
         *(str++)=itoch(v);
         fractionalDigits--;
       }
@@ -743,7 +747,7 @@ void vcbprintf(
         if (quoted) user_callback("\"",user_data);
       } break;
       case 'j': {
-        JsVar *v = jsvAsString(va_arg(argp, JsVar*), false/*no unlock*/);
+        JsVar *v = va_arg(argp, JsVar*);
         jsfGetJSONWithCallback(v, JSON_SOME_NEWLINES | JSON_PRETTY | JSON_SHOW_DEVICES, 0, user_callback, user_data);
         break;
       }
