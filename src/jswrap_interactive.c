@@ -16,7 +16,9 @@
 #include "jswrap_interactive.h"
 #include "jswrap_json.h" // for print/console.log
 #include "jsvar.h"
+#include "jsflags.h"
 #include "jsinteractive.h"
+
 
 /*JSON{
   "type" : "class",
@@ -37,6 +39,7 @@ A reference to the global scope, where everything is defined.
 /*JSON{
   "type" : "function",
   "name" : "setBusyIndicator",
+  "ifndef" : "SAVE_ON_FLASH",
   "generate" : "jswrap_interface_setBusyIndicator",
   "params" : [
     ["pin","JsVar",""]
@@ -44,6 +47,7 @@ A reference to the global scope, where everything is defined.
 }
 When Espruino is busy, set the pin specified here high. Set this to undefined to disable the feature.
  */
+#ifndef SAVE_ON_FLASH
 void jswrap_interface_setBusyIndicator(JsVar *pinVar) {
   Pin oldPin = pinBusyIndicator;
   pinBusyIndicator = jshGetPinFromVar(pinVar);
@@ -53,10 +57,12 @@ void jswrap_interface_setBusyIndicator(JsVar *pinVar) {
     if (pinBusyIndicator!=PIN_UNDEFINED) jshPinOutput(pinBusyIndicator, 1);
   }
 }
+#endif
 
 /*JSON{
   "type" : "function",
   "name" : "setSleepIndicator",
+  "ifndef" : "SAVE_ON_FLASH",
   "generate" : "jswrap_interface_setSleepIndicator",
   "params" : [
     ["pin","JsVar",""]
@@ -66,6 +72,7 @@ When Espruino is asleep, set the pin specified here low (when it's awake, set it
 
 Please see http://www.espruino.com/Power+Consumption for more details on this.
  */
+#ifndef SAVE_ON_FLASH
 void jswrap_interface_setSleepIndicator(JsVar *pinVar) {
   Pin oldPin = pinSleepIndicator;
   pinSleepIndicator = jshGetPinFromVar(pinVar);
@@ -75,24 +82,23 @@ void jswrap_interface_setSleepIndicator(JsVar *pinVar) {
     if (pinSleepIndicator!=PIN_UNDEFINED) jshPinOutput(pinSleepIndicator, 1);
   }
 }
+#endif
 
 /*JSON{
   "type" : "function",
   "name" : "setDeepSleep",
+  "if" : "defined(EFM32) || defined(STM32)",
   "generate" : "jswrap_interface_setDeepSleep",
   "params" : [
     ["sleep","bool",""]
   ]
 }
-Set whether we can enter deep sleep mode, which reduces power consumption to around 100uA. This only works on the Espruino Board.
+Set whether we can enter deep sleep mode, which reduces power consumption to around 100uA. This only works on STM32 Espruino Boards.
 
 Please see http://www.espruino.com/Power+Consumption for more details on this.
  */
 void jswrap_interface_setDeepSleep(bool sleep) {
-  if (sleep)
-    jsiStatus |= JSIS_ALLOW_DEEP_SLEEP;
-  else
-    jsiStatus &= ~JSIS_ALLOW_DEEP_SLEEP;
+  jsfSetFlag(JSF_DEEP_SLEEP, sleep);
 }
 
 
@@ -106,13 +112,20 @@ void jswrap_interface_setDeepSleep(bool sleep) {
   ]
 }
 Output debugging information
+
+Note: This is not included on boards with low amounts of flash memory, or the Espruino board.
  */
 void jswrap_interface_trace(JsVar *root) {
+  #ifdef ESPRUINOBOARD
+  // leave this function out on espruino board - we need to save as much flash as possible
+  jsiConsolePrintf("Trace not included on this board");
+  #else
   if (jsvIsUndefined(root)) {
     jsvTrace(execInfo.root, 0);
   } else {
     jsvTrace(root, 0);
   }
+  #endif
 }
 
 
