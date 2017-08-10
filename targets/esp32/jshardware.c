@@ -141,21 +141,20 @@ void jshInit() {
  * Reset the Espruino environment.
  */
 void jshReset() {
-    jshResetDevices();
-    jshPinDefaultPullup() ;
-    UartReset();
-	RMTReset();
-	ADCReset();
-	SPIReset();
-	I2CReset();
+  jshResetDevices();
+  jshPinDefaultPullup() ;
+  UartReset();
+  RMTReset();
+  ADCReset();
+  SPIReset();
+  I2CReset();
 }
 
 /**
  * Re-init the ESP32 after a soft-reset
  */
 void jshSoftInit() {
-  //jsWarn(">> jshSoftInit()\n");
-  esp32_wifi_soft_init();
+  jswrap_esp32_wifi_soft_init();
 }
 
 /**
@@ -180,6 +179,11 @@ void jshInterruptOff() {
 
 void jshInterruptOn()  {
   taskENABLE_INTERRUPTS();
+}
+
+/// Are we currently in an interrupt?
+bool jshIsInInterrupt() {
+  return false; // FIXME!
 }
 
 /// Enter simple sleep mode (can be woken up by interrupts). Returns true on success

@@ -353,13 +353,27 @@ JsVarFloat jshGetMillisecondsFromTime(JsSysTime time) {
   return (time * 1000.0) / SYSCLK_FREQ;
 }
 
-// software IO functions...
 void jshInterruptOff() {
-  __disable_irq(); // Disabling interrupts is not reasonable when using one of the SoftDevices.
+#ifdef BLUETOOTH
+  // disable non-softdevice IRQs
+  __set_BASEPRI(4<<5); // Disabling interrupts completely is not reasonable when using one of the SoftDevices.
+#else
+  __disable_irq();
+#endif
 }
 
 void jshInterruptOn() {
-  __enable_irq(); // *** This wont be good with SoftDevice!
+#ifdef BLUETOOTH
+  __set_BASEPRI(0);
+#else
+  __enable_irq();
+#endif
+}
+
+
+/// Are we currently in an interrupt?
+bool jshIsInInterrupt() {
+  return (SCB->ICSR & SCB_ICSR_VECTACTIVE_Msk) != 0;
 }
 
 void jshDelayMicroseconds(int microsec) {
@@ -789,9 +803,14 @@ void jshSetOutputValue(JshPinFunction func, int value) {
 
 /// Enable watchdog with a timeout in seconds
 void jshEnableWatchDog(JsVarFloat timeout) {
+  NRF_WDT->CONFIG = (WDT_CONFIG_HALT_Pause << WDT_CONFIG_HALT_Pos) | ( WDT_CONFIG_SLEEP_Run << WDT_CONFIG_SLEEP_Pos);
+  NRF_WDT->CRV = (int)(timeout*32768);
+  NRF_WDT->RREN |= WDT_RREN_RR0_Msk;  //Enable reload register 0
+  NRF_WDT->TASKS_START = 1;
 }
 
 void jshKickWatchDog() {
+  NRF_WDT->RR[0] = 0x6E524635;
 }
 
 /** Check the pin associated with this EXTI - return true if it is a 1 */
@@ -1249,7 +1268,7 @@ unsigned int jshGetRandomNumber() {
   unsigned int v = 0;
   uint8_t bytes_avail = 0;
   WAIT_UNTIL((sd_rand_application_bytes_available_get(&bytes_avail),bytes_avail>=sizeof(v)),"Random number");
-  sd_rand_application_vector_get(&v, sizeof(v));
+  sd_rand_application_vector_get((uint8_t*)&v, sizeof(v));
   return v;
 }
 
