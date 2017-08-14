@@ -19,83 +19,106 @@
 #include "jshardware.h"
 
 #include "nrf_soc.h"
+#include "nrf_drv_spi.h"
 
-#define SHT2x_ADDRESS 0x40
-#define SHT2X_POLYNOMIAL 0x131
+#define SPI0_CONFIG_SCK_PIN         28
+#define SPI0_CONFIG_MOSI_PIN        27
+#define LED_COUNT                   10
 
-static uint8_t calculateCrc(uint8_t bytes[], uint8_t len) {
-  uint8_t i, bit, crc = 0;
-  for (i = 0; i < len; i++) {
-    crc ^= bytes[i];
-    for (bit = 8; bit > 0; --bit) {
-      crc = (crc & 0x80) ? ((crc << 1) ^ SHT2X_POLYNOMIAL) : (crc << 1);
+static const nrf_drv_spi_t m_spi_master_0 = NRF_DRV_SPI_INSTANCE(0);
+
+static uint8_t rgbData[LED_COUNT * 3] = {0};
+static bool initialized = false;
+
+/*JSON{
+    "type" : "staticmethod",
+    "class" : "spinner",
+    "name" : "start",
+    "ifdef" : "NGBEACON",
+    "generate" : "jswrap_ngbeacon_start",
+    "return" : ["int", "start result" ]
+}*/
+int jswrap_ngbeacon_start() {
+  nrf_drv_spi_config_t config = NRF_DRV_SPI_DEFAULT_CONFIG;
+  config.sck_pin   = SPI0_CONFIG_SCK_PIN;
+  config.mosi_pin  = SPI0_CONFIG_MOSI_PIN;
+  config.frequency = NRF_DRV_SPI_FREQ_1M;
+  config.mode      = NRF_DRV_SPI_MODE_1;
+  config.bit_order = NRF_DRV_SPI_BIT_ORDER_LSB_FIRST;
+  uint32_t rc = nrf_drv_spi_init(&m_spi_master_0, &config, NULL);
+  if (rc == NRF_SUCCESS) {
+    initialized = true;
+  }
+  return rc;
+}
+
+/*JSON{
+    "type" : "staticmethod",
+    "class" : "spinner",
+    "name" : "setPixel",
+    "ifdef" : "NGBEACON",
+    "generate" : "jswrap_ngbeacon_setPixel",
+    "params" : [
+      ["led","int","led index"],
+      ["rgb","int","red (MSB) + green + blue (LSB)"],
+      ["write","bool","write (default = false)"]
+    ],
+    "return" : ["int", "write result" ]
+}*/
+int jswrap_ngbeacon_setPixel(int led, int rgb, bool write) {
+  if (led >= 0 && led < LED_COUNT) {
+    rgbData[led*3] = (rgb >> 16) & 0xff;
+    rgbData[led*3+1] = (rgb >> 8) & 0xff;
+    rgbData[led*3+2] = rgb & 0xff;
+    if (write) {
+      return jswrap_ngbeacon_write();
     }
   }
-  return crc;
-}
-
-static float readShtSensor(uint8_t cmd) {
-  uint8_t result[3] = {0};
-  jshI2CWrite(EV_I2C1, SHT2x_ADDRESS, 1, &cmd, true);
-  jshI2CRead(EV_I2C1, SHT2x_ADDRESS, sizeof(result), result, true);
-  uint8_t crc = calculateCrc(result, 2);
-  if (result[2] != crc) {
-    return NAN;
-  }
-  float value = (result[0] << 8) | (result[1] & ~0x03);
-  return value;
+  return 0;
 }
 
 /*JSON{
-  "type" : "init",
-  "generate" : "jswrap_ngbeacon_init"
+    "type" : "staticmethod",
+    "class" : "spinner",
+    "name" : "write",
+    "ifdef" : "NGBEACON",
+    "generate" : "jswrap_ngbeacon_write",
+    "return" : ["int", "write result" ]
 }*/
-void jswrap_ngbeacon_init() {
-  // enable I2C (for sensors)
-  JshI2CInfo inf;
-  jshI2CInitInfo(&inf);
-  inf.pinSDA = JSH_PORTD_OFFSET+29; // 'D29'
-  inf.pinSCL = JSH_PORTD_OFFSET+30; // 'D30'
-  jshI2CSetup(EV_I2C1, &inf);
+int jswrap_ngbeacon_write() {
+  uint8_t buf[LED_COUNT * 4 + 8] = {0};
+
+  if (!initialized) {
+    uint32_t rc = jswrap_ngbeacon_start();
+    if (rc != NRF_SUCCESS) {
+      return rc;
+    }
+  }
+
+  for (uint8_t i = 0; i < LED_COUNT; i++) {
+    buf[4 + i * 4] = 0xff;
+    buf[4 + i * 4 + 1] = rgbData[i * 3 + 2];
+    buf[4 + i * 4 + 2] = rgbData[i * 3 + 1];
+    buf[4 + i * 4 + 3] = rgbData[i * 3];
+  }
+
+  return nrf_drv_spi_transfer(&m_spi_master_0, buf, sizeof(buf), NULL, 0);
 }
 
 /*JSON{
     "type" : "staticmethod",
-    "class" : "ngbeacon",
-    "name" : "temperature",
+    "class" : "spinner",
+    "name" : "clear",
     "ifdef" : "NGBEACON",
-    "generate" : "jswrap_ngbeacon_temperature",
-    "return" : ["float", "Temperature reading value, in celcius" ]
+    "params" : [
+      ["write","bool","write (default = false)"]
+    ],
+    "generate" : "jswrap_ngbeacon_clear"
 }
 */
-JsVarFloat jswrap_ngbeacon_temperature() {
-  float value = readShtSensor(0xe3);
-  return -46.85 + 175.72 / 65536.0 * value;
-}
-
-/*JSON{
-    "type" : "staticmethod",
-    "class" : "ngbeacon",
-    "name" : "humidity",
-    "ifdef" : "NGBEACON",
-    "generate" : "jswrap_ngbeacon_humidity",
-    "return" : ["float", "Humidity percentage" ]
-}
-*/
-JsVarFloat jswrap_ngbeacon_humidity() {
-  float value = readShtSensor(0xe5);
-  return -6.0 + 125.0 / 65536.0 * value;
-}
-
-/*JSON{
-    "type" : "staticmethod",
-    "class" : "ngbeacon",
-    "name" : "dfu",
-    "ifdef" : "NGBEACON",
-    "generate" : "jswrap_ngbeacon_dfu"
-}
-*/
-void jswrap_ngbeacon_dfu() {
-  sd_power_gpregret_set(0, 0x1);
-  NVIC_SystemReset();
+void jswrap_ngbeacon_clear(bool write) {
+  memset(rgbData, 0, sizeof(rgbData));
+  if (write) {
+    jswrap_ngbeacon_write();
+  }
 }

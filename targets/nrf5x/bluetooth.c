@@ -1117,7 +1117,7 @@ static void gap_params_init() {
 #elif defined(RUUVITAG)
     strcpy(deviceName,"RuuviTag");
 #elif defined(NGBEACON)
-    strcpy(deviceName,"ng-beacon");
+    strcpy(deviceName,"Spinduino");
 #elif defined(HEXBADGE)
     strcpy(deviceName,"Badge");
 #else

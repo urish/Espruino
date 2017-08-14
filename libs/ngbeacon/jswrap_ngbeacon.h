@@ -13,7 +13,7 @@
  */
 #include "jspin.h"
 
-void jswrap_ngbeacon_init();
-JsVarFloat jswrap_ngbeacon_temperature();
-JsVarFloat jswrap_ngbeacon_humidity();
-void jswrap_ngbeacon_dfu();
+int jswrap_ngbeacon_start();
+int jswrap_ngbeacon_setPixel(int led, int rgb, bool write);
+int jswrap_ngbeacon_write();
+void jswrap_ngbeacon_clear(bool write);
