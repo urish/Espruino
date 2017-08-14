@@ -429,7 +429,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt) {
           bleSetActiveBluetoothGattServer(0);
           BleTask task = bleGetCurrentTask();
           if (BLETASK_IS_CENTRAL(task)) {
-            bleCompleteTaskFailAndUnLock(task, jsvNewFromString("Disconnected."));
+            bleCompleteTaskFailAndUnLock(task, jsvNewFromString("Disconnected"));
           }
         } else
 #endif
@@ -1118,12 +1118,14 @@ static void gap_params_init() {
     strcpy(deviceName,"RuuviTag");
 #elif defined(NGBEACON)
     strcpy(deviceName,"ng-beacon");
+#elif defined(HEXBADGE)
+    strcpy(deviceName,"Badge");
 #else
     strcpy(deviceName,"Espruino "PC_BOARD_ID);
 #endif
 
     size_t len = strlen(deviceName);
-#if defined(PUCKJS) || defined(RUUVITAG)
+#if defined(PUCKJS) || defined(RUUVITAG) || defined(HEXBADGE)
     // append last 2 bytes of MAC address to name
     uint32_t addr =  NRF_FICR->DEVICEADDR[0];
     deviceName[len++] = ' ';
