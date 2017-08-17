@@ -21,14 +21,29 @@
 #include "nrf_soc.h"
 #include "nrf_drv_spi.h"
 
-#define SPI0_CONFIG_SCK_PIN         28
-#define SPI0_CONFIG_MOSI_PIN        27
-#define LED_COUNT                   10
+#define LATCH1_PIN            3
+#define LATCH2_PIN            4
+
+#define SPI0_CONFIG_SCK_PIN   28
+#define SPI0_CONFIG_MOSI_PIN  27
+#define LED_COUNT             10
+
+static uint32_t spinCounter = 0;
+static JsSysTime previousTick = 0;
+static JsSysTime lastTick = 0;
 
 static const nrf_drv_spi_t m_spi_master_0 = NRF_DRV_SPI_INSTANCE(0);
 
 static uint8_t rgbData[LED_COUNT * 3] = {0};
 static bool initialized = false;
+
+static void onLatchChange(bool state, IOEventFlags flags) {
+  if (state) {
+    previousTick = lastTick;
+    lastTick = jshGetSystemTime();
+    spinCounter++;
+  }
+}
 
 /*JSON{
     "type" : "staticmethod",
@@ -49,6 +64,10 @@ int jswrap_ngbeacon_start() {
   if (rc == NRF_SUCCESS) {
     initialized = true;
   }
+
+  IOEventFlags exti = jshPinWatch(LATCH1_PIN, true);
+  jshSetEventCallback(exti, onLatchChange);
+
   return rc;
 }
 
@@ -86,7 +105,7 @@ int jswrap_ngbeacon_setPixel(int led, int rgb, bool write) {
     "return" : ["int", "write result" ]
 }*/
 int jswrap_ngbeacon_write() {
-  uint8_t buf[LED_COUNT * 4 + 8] = {0};
+  uint8_t buf[LED_COUNT * 4 + 12] = {0};
 
   if (!initialized) {
     uint32_t rc = jswrap_ngbeacon_start();
@@ -121,4 +140,28 @@ void jswrap_ngbeacon_clear(bool write) {
   if (write) {
     jswrap_ngbeacon_write();
   }
+}
+
+/*JSON{
+    "type" : "staticmethod",
+    "class" : "spinner",
+    "name" : "spinCount",
+    "ifdef" : "NGBEACON",
+    "generate" : "jswrap_spinner_spinCount",
+    "return" : ["int", "number of spins" ]
+}*/
+uint32_t jswrap_spinner_spinCount() {
+  return spinCounter;
+}
+
+/*JSON{
+    "type" : "staticmethod",
+    "class" : "spinner",
+    "name" : "rpm",
+    "ifdef" : "NGBEACON",
+    "generate" : "jswrap_spinner_rpm",
+    "return" : ["float", "spinner speed in RPM" ]
+}*/
+JsVarFloat jswrap_spinner_rpm() {
+  return 60000.0 / jshGetMillisecondsFromTime(lastTick - previousTick);
 }
