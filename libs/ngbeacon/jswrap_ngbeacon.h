@@ -17,5 +17,5 @@ int jswrap_ngbeacon_start();
 int jswrap_ngbeacon_setPixel(int led, int rgb, bool write);
 int jswrap_ngbeacon_write();
 void jswrap_ngbeacon_clear(bool write);
-uint32_t jswrap_spinner_spinCount();
-JsVarFloat jswrap_spinner_rpm();
+void jswrap_spinner_dfu();
+uint32_t jswrap_schedule_frames(JsVar *frames, JsVarFloat interval);

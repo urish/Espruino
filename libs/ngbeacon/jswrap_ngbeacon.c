@@ -17,6 +17,8 @@
 
 #include "jswrap_ngbeacon.h"
 #include "jshardware.h"
+#include "jstimer.h"
+#include "jsvar.h"
 
 #include "nrf_soc.h"
 #include "nrf_drv_spi.h"
@@ -27,22 +29,32 @@
 #define SPI0_CONFIG_SCK_PIN   28
 #define SPI0_CONFIG_MOSI_PIN  27
 #define LED_COUNT             10
-
-static uint32_t spinCounter = 0;
-static JsSysTime previousTick = 0;
-static JsSysTime lastTick = 0;
+#define FRAME_SIZE            (LED_COUNT * 3)
 
 static const nrf_drv_spi_t m_spi_master_0 = NRF_DRV_SPI_INSTANCE(0);
 
 static uint8_t rgbData[LED_COUNT * 3] = {0};
 static bool initialized = false;
 
-static void onLatchChange(bool state, IOEventFlags flags) {
-  if (state) {
-    previousTick = lastTick;
-    lastTick = jshGetSystemTime();
-    spinCounter++;
+static JsVar *frameData = NULL;
+static uint8_t *frameDataPtr = NULL;
+
+uint16_t frameCounter = 0;
+
+static void drawFrame(JsSysTime time, void* userdata) {
+  uint32_t len = jsvGetArrayBufferLength(frameData);
+  frameCounter = (frameCounter + 1) % (len / FRAME_SIZE);
+  uint8_t buf[LED_COUNT * 4 + 12] = {0};
+  uint8_t *frame = &frameDataPtr[frameCounter * FRAME_SIZE];
+
+  for (uint8_t i = 0; i < LED_COUNT; i++) {
+    buf[4 + i * 4] = 0xff;
+    buf[4 + i * 4 + 1] = frame[i*3+2];
+    buf[4 + i * 4 + 2] = frame[i*3+1];
+    buf[4 + i * 4 + 3] = frame[i*3];
   }
+
+  nrf_drv_spi_transfer(&m_spi_master_0, buf, sizeof(buf), NULL, 0);
 }
 
 /*JSON{
@@ -64,9 +76,6 @@ int jswrap_ngbeacon_start() {
   if (rc == NRF_SUCCESS) {
     initialized = true;
   }
-
-  IOEventFlags exti = jshPinWatch(LATCH1_PIN, true);
-  jshSetEventCallback(exti, onLatchChange);
 
   return rc;
 }
@@ -145,23 +154,53 @@ void jswrap_ngbeacon_clear(bool write) {
 /*JSON{
     "type" : "staticmethod",
     "class" : "spinner",
-    "name" : "spinCount",
+    "name" : "dfu",
     "ifdef" : "NGBEACON",
-    "generate" : "jswrap_spinner_spinCount",
-    "return" : ["int", "number of spins" ]
+    "generate" : "jswrap_spinner_dfu"
 }*/
-uint32_t jswrap_spinner_spinCount() {
-  return spinCounter;
+void jswrap_spinner_dfu() {
+  sd_power_gpregret_set(0, 0x1);
+  NVIC_SystemReset();
 }
 
 /*JSON{
     "type" : "staticmethod",
     "class" : "spinner",
-    "name" : "rpm",
+    "name" : "schedule",
     "ifdef" : "NGBEACON",
-    "generate" : "jswrap_spinner_rpm",
-    "return" : ["float", "spinner speed in RPM" ]
+    "generate" : "jswrap_schedule_frames",
+    "params" : [
+      ["frames", "JsVar", "frames"],
+      ["interval", "float", "interval"]
+    ],
+    "return" : ["int", "result"]
 }*/
-JsVarFloat jswrap_spinner_rpm() {
-  return 60000.0 / jshGetMillisecondsFromTime(lastTick - previousTick);
+uint32_t jswrap_schedule_frames(JsVar *frames, JsVarFloat interval) {
+  // TODO ensure frames is actually an Array buffer 
+  // TODO jsvGetArrayBufferLength(frames) % FRAME_SIZE == 0, length > 0 (RGB * 10 LEDS)
+  uint32_t len = jsvGetArrayBufferLength(frames);
+  if (len == 0) {
+    return len;
+  }
+  
+  if (frameData) {
+    jsvUnLock(frameData);
+    frameData = NULL;
+    frameDataPtr = NULL;
+  }
+  
+  frameData = jsvNewArrayBufferWithPtr(len, &frameDataPtr);
+  if (!frameData) {
+    return 0;
+  }
+
+  for (int i = 0; i < len; i++) {
+    frameDataPtr[i] = jsvGetIntegerAndUnLock(jsvArrayBufferGet(frames, i));
+  }
+
+  JsSysTime frameTime = jshGetTimeFromMilliseconds(interval);
+  jstStopExecuteFn(drawFrame, NULL);
+  jstExecuteFn(drawFrame, NULL, jshGetSystemTime() + frameTime, frameTime);
+
+  return len;
 }
