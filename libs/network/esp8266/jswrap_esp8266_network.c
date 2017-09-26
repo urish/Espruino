@@ -44,7 +44,7 @@
 #include <c_types.h>
 #include <user_interface.h>
 #include <mem.h>
-#include <osapi.h>
+#include "osapi_release.h"
 #include <ping.h>
 #include <espconn.h>
 #include <sntp.h>
@@ -842,8 +842,8 @@ void jswrap_wifi_save(JsVar *what) {
   conf->crc = crc32((uint8_t*)flashBlock, sizeof(flashBlock));
   DBG("Wifi.save: len=%d vers=%d crc=0x%08lx\n", conf->length, conf->version, (long unsigned int) conf->crc);
   if (map == 6 ) {
-    jshFlashErasePage( 0x3FB000);
-    jshFlashWrite(conf,0x3FB000, sizeof(flashBlock));    
+    jshFlashErasePage( 0x0FB000);
+    jshFlashWrite(conf,0x0FB000, sizeof(flashBlock));    
   } else {  
     jshFlashErasePage(0x7B000);
     jshFlashWrite(conf, 0x7B000, sizeof(flashBlock));
@@ -858,7 +858,7 @@ void jswrap_wifi_restore(void) {
   os_memset(flashBlock, 0, sizeof(flashBlock));
   uint32_t map = system_get_flash_size_map();
   if (map == 6 ) {
-    jshFlashRead(flashBlock, 0x3FB000, sizeof(flashBlock));
+    jshFlashRead(flashBlock, 0x0FB000, sizeof(flashBlock));
   } else {
     jshFlashRead(flashBlock, 0x7B000, sizeof(flashBlock));
   }  
@@ -1066,7 +1066,10 @@ void jswrap_wifi_setHostname(
 
 static bool mdns_started;
 
+// FIXME: To be removed in favor of using mDNS.js module instead
 void startMDNS(char *hostname) {
+  return; // FIXME: debug
+
   if (mdns_started) stopMDNS();
 
   // find our IP address

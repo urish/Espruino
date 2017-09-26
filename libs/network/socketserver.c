@@ -16,6 +16,7 @@
 #include "jsparse.h"
 #include "jsinteractive.h"
 #include "jshardware.h"
+#include "jswrap_net.h"
 #include "jswrap_stream.h"
 
 #define HTTP_NAME_SOCKETTYPE "type" // normal socket or HTTP
@@ -46,6 +47,15 @@
 // esp8266 debugging, need to remove this eventually
 extern int os_printf_plus(const char *format, ...)  __attribute__((format(printf, 1, 2)));
 #define printf os_printf_plus
+#endif
+
+#if NET_DBG > 0
+#define DBG(format, ...) os_printf(format, ## __VA_ARGS__)
+// #include "jsinteractive.h"
+// #define DBG(format, ...) jsiConsolePrintf(format, ## __VA_ARGS__)
+static char DBG_LIB[] = "socketserver"; // library name
+#else
+#define DBG(format, ...) do { } while(0)
 #endif
 
 // -----------------------------
@@ -193,9 +203,17 @@ void _socketConnectionKill(JsNetwork *net, JsVar *connection) {
   if (!net || networkState != NETWORKSTATE_ONLINE) return;
   int sckt = (int)jsvGetIntegerAndUnLock(jsvObjectGetChild(connection,HTTP_NAME_SOCKET,0))-1; // so -1 if undefined
   if (sckt>=0) {
-    netCloseSocket(net, sckt);
+    SocketType socketType = socketGetType(connection);
+    netCloseSocket(net, socketType, sckt);
     jsvObjectRemoveChild(connection,HTTP_NAME_SOCKET);
+    jsvObjectSetChildAndUnLock(connection, HTTP_NAME_CONNECTED, jsvNewFromBool(false));
+    jsvObjectSetChildAndUnLock(connection, HTTP_NAME_CLOSE, jsvNewFromBool(true));
   }
+}
+
+bool _socketConnectionOpen(JsVar *connection) {
+  return !(jsvGetBoolAndUnLock(jsvObjectGetChild(connection, HTTP_NAME_CLOSENOW, false)) ||
+           jsvGetBoolAndUnLock(jsvObjectGetChild(connection, HTTP_NAME_CLOSE, false)));
 }
 
 // -----------------------------
@@ -225,12 +243,14 @@ NO_INLINE static void _socketCloseAllConnections(JsNetwork *net) {
 
 // returns 0 on success and a (negative) error number on failure
 int socketSendData(JsNetwork *net, JsVar *connection, int sckt, JsVar **sendData) {
-  char *buf = alloca(net->chunkSize); // allocate on stack
+  char *buf = alloca((size_t)net->chunkSize); // allocate on stack
 
   assert(!jsvIsEmptyString(*sendData));
 
-  size_t bufLen = httpStringGet(*sendData, buf, net->chunkSize);
-  int num = netSend(net, sckt, buf, bufLen);
+  SocketType socketType = socketGetType(connection);
+  size_t bufLen = httpStringGet(*sendData, buf, (size_t)net->chunkSize);
+  int num = netSend(net, socketType, sckt, buf, bufLen);
+  DBG("socketSendData %x:%d (%d -> %d)\n", *(uint32_t*)buf, *(unsigned short*)(buf+sizeof(uint32_t)), bufLen, num);
   if (num < 0) return num; // an error occurred
   // Now cut what we managed to send off the beginning of sendData
   if (num > 0) {
@@ -296,7 +316,7 @@ static bool fireErrorEvent(int error, JsVar *obj1, JsVar *obj2) {
 // -----------------------------
 
 bool socketServerConnectionsIdle(JsNetwork *net) {
-  char *buf = alloca(net->chunkSize); // allocate on stack
+  char *buf = alloca((size_t)net->chunkSize); // allocate on stack
 
   JsVar *arr = socketGetArray(HTTP_ARRAY_HTTP_SERVER_CONNECTIONS,false);
   if (!arr) return false;
@@ -317,47 +337,67 @@ bool socketServerConnectionsIdle(JsNetwork *net) {
     int error = 0;
 
     if (!closeConnectionNow) {
-      int num = netRecv(net, sckt, buf, net->chunkSize);
+      int num = netRecv(net, socketType, sckt, buf, (size_t)net->chunkSize);
       if (num<0) {
         // we probably disconnected so just get rid of this
         closeConnectionNow = true;
         error = num;
       } else {
-        // add it to our request string
         if (num>0) {
           JsVar *receiveData = jsvObjectGetChild(connection,HTTP_NAME_RECEIVE_DATA,0);
           JsVar *oldReceiveData = receiveData;
           if (!receiveData) receiveData = jsvNewFromEmptyString();
           if (receiveData) {
-            jsvAppendStringBuf(receiveData, buf, (size_t)num);
-            bool hadHeaders = jsvGetBoolAndUnLock(jsvObjectGetChild(connection,HTTP_NAME_HAD_HEADERS,0));
-            if (!hadHeaders && httpParseHeaders(&receiveData, connection, true)) {
-              hadHeaders = true;
-              jsvObjectSetChildAndUnLock(connection, HTTP_NAME_HAD_HEADERS, jsvNewFromBool(hadHeaders));
-              JsVar *server = jsvObjectGetChild(connection,HTTP_NAME_SERVER_VAR,0);
-              JsVar *args[2] = { connection, socket };
-              jsiQueueObjectCallbacks(server, HTTP_NAME_ON_CONNECT, args, ((socketType&ST_TYPE_MASK)==ST_HTTP) ? 2 : 1);
-              jsvUnLock(server);
-            }
-            if (hadHeaders && !jsvIsEmptyString(receiveData)) {
-              // Keep track of how much we received (so we can close once we have it)
-              if ((socketType&ST_TYPE_MASK)==ST_HTTP) {
-                jsvObjectSetChildAndUnLock(connection, HTTP_NAME_RECEIVE_COUNT,
-                    jsvNewFromInteger(
-                      jsvGetIntegerAndUnLock(jsvObjectGetChild(connection, HTTP_NAME_RECEIVE_COUNT, JSV_INTEGER)) +
-                      jsvGetStringLength(receiveData)
-                    ));
+            if ((socketType&ST_TYPE_MASK)==ST_UDP) {
+              JsVar *address = jsvNewFromEmptyString(); // inet_ntoa replacement
+              JsVar *receiveInfo = jsvNewObject();
+              if (receiveInfo && address) { // could be out of memory
+                uint32_t delta = sizeof(uint32_t) + sizeof(unsigned short) + sizeof(uint16_t);
+                uint32_t host;
+                unsigned short *port;
+                host = *(uint32_t*)buf;
+                port = *(unsigned short*)(buf + sizeof(uint32_t));
+                buf += delta;
+                num -= delta;
+                jsvAppendStringBuf(receiveData, buf, (size_t)num);
+                jsvAppendPrintf(address, "%d.%d.%d.%d", ((uint8_t*)&host)[0], ((uint8_t*)&host)[1], ((uint8_t*)&host)[2], ((uint8_t*)&host)[3]);
+                jsvObjectSetChildAndUnLock(receiveInfo, "address", address);
+                jsvObjectSetChildAndUnLock(receiveInfo, "port", jsvNewFromInteger(port));
+                jsvObjectSetChildAndUnLock(receiveInfo, "size", jsvNewFromInteger(num));
+                jswrap_dgram_messageCallback(connection, receiveData, receiveInfo);
+                jsvUnLock(receiveInfo);
               }
-              // execute 'data' callback or save data
-              if (jswrap_stream_pushData(connection, receiveData, false)) {
-                // clear received data
-                jsvUnLock(receiveData);
-                receiveData = 0;
+            } else {
+              jsvAppendStringBuf(receiveData, buf, (size_t)num);
+              bool hadHeaders = jsvGetBoolAndUnLock(jsvObjectGetChild(connection,HTTP_NAME_HAD_HEADERS,0));
+              if (!hadHeaders && httpParseHeaders(&receiveData, connection, true)) {
+                hadHeaders = true;
+                jsvObjectSetChildAndUnLock(connection, HTTP_NAME_HAD_HEADERS, jsvNewFromBool(hadHeaders));
+                JsVar *server = jsvObjectGetChild(connection,HTTP_NAME_SERVER_VAR,0);
+                JsVar *args[2] = { connection, socket };
+                jsiQueueObjectCallbacks(server, HTTP_NAME_ON_CONNECT, args, ((socketType&ST_TYPE_MASK)==ST_HTTP) ? 2 : 1);
+                jsvUnLock(server);
               }
+              if (hadHeaders && !jsvIsEmptyString(receiveData)) {
+                // Keep track of how much we received (so we can close once we have it)
+                if ((socketType&ST_TYPE_MASK)==ST_HTTP) {
+                  jsvObjectSetChildAndUnLock(connection, HTTP_NAME_RECEIVE_COUNT,
+                      jsvNewFromInteger(
+                        jsvGetIntegerAndUnLock(jsvObjectGetChild(connection, HTTP_NAME_RECEIVE_COUNT, JSV_INTEGER)) +
+                        (JsVarInt)jsvGetStringLength(receiveData)
+                      ));
+                }
+                // execute 'data' callback or save data
+                if (jswrap_stream_pushData(connection, receiveData, false)) {
+                  // clear received data
+                  jsvUnLock(receiveData);
+                  receiveData = 0;
+                }
+              }
+              // if received data changed, update it
+              if (receiveData != oldReceiveData)
+                jsvObjectSetChild(connection,HTTP_NAME_RECEIVE_DATA,receiveData);
             }
-            // if received data changed, update it
-            if (receiveData != oldReceiveData)
-              jsvObjectSetChild(connection,HTTP_NAME_RECEIVE_DATA,receiveData);
             jsvUnLock(receiveData);
           }
         }
@@ -376,7 +416,7 @@ bool socketServerConnectionsIdle(JsNetwork *net) {
           closeConnectionNow = true;
           error = sent;
         }
-        jsvObjectSetChild(socket, HTTP_NAME_SEND_DATA, sendData); // socketSendData prob updated sendData
+        jsvObjectSetChild(socket, HTTP_NAME_SEND_DATA, sendData); // socketSendData updated sendData
       }
       // only close if we want to close, have no data to send, and aren't receiving data
       bool wantClose = jsvGetBoolAndUnLock(jsvObjectGetChild(socket,HTTP_NAME_CLOSE,0));
@@ -400,6 +440,8 @@ bool socketServerConnectionsIdle(JsNetwork *net) {
       jsvUnLock(sendData);
     }
     if (closeConnectionNow) {
+      DBG("CLOSE NOW");
+
       // send out any data that we were POSTed
       JsVar *receiveData = jsvObjectGetChild(connection,HTTP_NAME_RECEIVE_DATA,0);
       bool hadHeaders = jsvGetBoolAndUnLock(jsvObjectGetChild(connection,HTTP_NAME_HAD_HEADERS,0));
@@ -451,7 +493,7 @@ void socketClientPushReceiveData(JsVar *connection, JsVar *socket, JsVar **recei
 }
 
 bool socketClientConnectionsIdle(JsNetwork *net) {
-  char *buf = alloca(net->chunkSize); // allocate on stack
+  char *buf = alloca((size_t)net->chunkSize); // allocate on stack
 
   JsVar *arr = socketGetArray(HTTP_ARRAY_HTTP_CLIENT_CONNECTIONS,false);
   if (!arr) return false;
@@ -493,7 +535,9 @@ bool socketClientConnectionsIdle(JsNetwork *net) {
         if (sendData && !jsvIsEmptyString(sendData)) {
           // don't try to send if we're already in error state
           int num = 0;
-          if (error == 0) num = socketSendData(net, connection, sckt, &sendData);
+          if (error == 0) {
+              num = socketSendData(net, connection, sckt, &sendData);
+          }
           if (num > 0 && !alreadyConnected && !isHttp) { // whoa, we sent something, must be connected!
             jsiQueueObjectCallbacks(connection, HTTP_NAME_ON_CONNECT, &connection, 1);
             jsvObjectSetChildAndUnLock(connection, HTTP_NAME_CONNECTED, jsvNewFromBool(true));
@@ -503,7 +547,7 @@ bool socketClientConnectionsIdle(JsNetwork *net) {
             closeConnectionNow = true;
             error = num;
           }
-          jsvObjectSetChild(connection, HTTP_NAME_SEND_DATA, sendData); // _http_send prob updated sendData
+          jsvObjectSetChild(connection, HTTP_NAME_SEND_DATA, sendData); // socketSendData updated sendData
         } else {
           // no data to send, do we want to close? do so.
           if (jsvGetBoolAndUnLock(jsvObjectGetChild(connection, HTTP_NAME_CLOSE, false)))
@@ -511,8 +555,7 @@ bool socketClientConnectionsIdle(JsNetwork *net) {
         }
         // Now read data if possible (and we have space for it)
         if (!receiveData || !hadHeaders) {
-          int num = netRecv(net, sckt, buf, net->chunkSize);
-          //if (num != 0) printf("recv returned %d\r\n", num);
+          int num = netRecv(net, socketType, sckt, buf, (size_t)net->chunkSize);
           if (!alreadyConnected && num == SOCKET_ERR_NO_CONN) {
             ; // ignore... it's just telling us we're not connected yet
           } else if (num < 0) {
@@ -534,20 +577,42 @@ bool socketClientConnectionsIdle(JsNetwork *net) {
             if (num > 0) {
               if (!receiveData) {
                 receiveData = jsvNewFromEmptyString();
-                jsvObjectSetChild(connection, HTTP_NAME_RECEIVE_DATA, receiveData);
               }
               if (receiveData) { // could be out of memory
-                jsvAppendStringBuf(receiveData, buf, (size_t)num);
-                if ((socketType&ST_TYPE_MASK)==ST_HTTP && !hadHeaders) {
-                  // for HTTP see whether we now have full response headers
-                  JsVar *resVar = jsvObjectGetChild(connection,HTTP_NAME_RESPONSE_VAR,0);
-                  if (httpParseHeaders(&receiveData, resVar, false)) {
-                    hadHeaders = true;
-                    jsvObjectSetChildAndUnLock(connection, HTTP_NAME_HAD_HEADERS, jsvNewFromBool(hadHeaders));
-                    jsiQueueObjectCallbacks(connection, HTTP_NAME_ON_CONNECT, &resVar, 1);
+                if ((socketType&ST_TYPE_MASK)==ST_UDP) {
+                  JsVar *address = jsvNewFromEmptyString(); // inet_ntoa replacement
+                  JsVar *receiveInfo = jsvNewObject();
+                  if (receiveInfo && address) { // could be out of memory
+                    uint32_t delta = sizeof(uint32_t) + sizeof(unsigned short) + sizeof(uint16_t);
+                    uint32_t host;
+                    unsigned short port;
+                    host = *(uint32_t*)buf;
+                    port = *(unsigned short*)(buf + sizeof(uint32_t));
+                    buf += delta;
+                    num -= delta;
+                    jsvAppendStringBuf(receiveData, buf, (size_t)num);
+                    jsvAppendPrintf(address, "%d.%d.%d.%d", ((uint8_t*)&host)[0], ((uint8_t*)&host)[1], ((uint8_t*)&host)[2], ((uint8_t*)&host)[3]);
+                    jsvObjectSetChildAndUnLock(receiveInfo, "address", address);
+                    jsvObjectSetChildAndUnLock(receiveInfo, "port", jsvNewFromInteger(port));
+                    jsvObjectSetChildAndUnLock(receiveInfo, "size", jsvNewFromInteger(num));
+                    jswrap_dgram_messageCallback(connection, receiveData, receiveInfo);
+                    jsvUnLock(receiveInfo);
                   }
-                  jsvUnLock(resVar);
+                } else {
+                  jsvAppendStringBuf(receiveData, buf, (size_t)num);
                   jsvObjectSetChild(connection, HTTP_NAME_RECEIVE_DATA, receiveData);
+
+                  if ((socketType&ST_TYPE_MASK)==ST_HTTP && !hadHeaders) {
+                    // for HTTP see whether we now have full response headers
+                    JsVar *resVar = jsvObjectGetChild(connection,HTTP_NAME_RESPONSE_VAR,0);
+                    if (httpParseHeaders(&receiveData, resVar, false)) {
+                      hadHeaders = true;
+                      jsvObjectSetChildAndUnLock(connection, HTTP_NAME_HAD_HEADERS, jsvNewFromBool(hadHeaders));
+                      jsiQueueObjectCallbacks(connection, HTTP_NAME_ON_CONNECT, &resVar, 1);
+                    }
+                    jsvUnLock(resVar);
+                    jsvObjectSetChild(connection, HTTP_NAME_RECEIVE_DATA, receiveData);
+                  }
                 }
               }
             }
@@ -558,6 +623,8 @@ bool socketClientConnectionsIdle(JsNetwork *net) {
     }
 
     if (closeConnectionNow) {
+      DBG("close now");
+
       socketClientPushReceiveData(connection, socket, &receiveData);
       if (!receiveData) {
         // If we had data to send but the socket closed, this is an error
@@ -611,12 +678,16 @@ bool socketIdle(JsNetwork *net) {
     while (jsvObjectIteratorHasValue(&it)) {
       hadSockets = true;
 
-      JsVar *server = jsvObjectIteratorGetValue(&it);
-      int sckt = (int)jsvGetIntegerAndUnLock(jsvObjectGetChild(server,HTTP_NAME_SOCKET,0))-1; // so -1 if undefined
 
-      int theClient = netAccept(net, sckt);
+      JsVar *server = jsvObjectIteratorGetValue(&it);
+      SocketType socketType = socketGetType(server);
+
+      int theClient = -1;
+      if ((socketType&ST_TYPE_MASK)!=ST_UDP) {
+          int sckt = (int)jsvGetIntegerAndUnLock(jsvObjectGetChild(server,HTTP_NAME_SOCKET,0))-1; // so -1 if undefined
+          theClient = netAccept(net, sckt);
+      }
       if (theClient >= 0) {
-        SocketType socketType = socketGetType(server);
         if ((socketType&ST_TYPE_MASK) == ST_HTTP) {
           JsVar *req = jspNewObject(0, "httpSRq");
           JsVar *res = jspNewObject(0, "httpSRs");
@@ -636,7 +707,7 @@ bool socketIdle(JsNetwork *net) {
           // Normal sockets
           JsVar *sock = jspNewObject(0, "Socket");
           if (sock) { // out of memory?
-            socketSetType(sock, ST_NORMAL);
+            socketSetType(sock, socketType);
             JsVar *arr = socketGetArray(HTTP_ARRAY_HTTP_CLIENT_CONNECTIONS, true);
             if (arr) {
               jsvArrayPush(arr, sock);
@@ -672,22 +743,44 @@ JsVar *serverNew(SocketType socketType, JsVar *callback) {
   return server;
 }
 
-void serverListen(JsNetwork *net, JsVar *server, int port) {
+void serverAddMembership(JsNetwork *net, JsVar *server, JsVar *group, JsVar *ip) {
+  // FIXME: perhaps extend the JsNetwork with addmembership/removemembership instead of using options
+  JsVar *options = jsvObjectGetChild(server, HTTP_NAME_OPTIONS_VAR, 0);
+  if (options) {
+      jsvObjectSetChild(options, "multicastGroup", group);
+      jsvObjectSetChild(options, "multicastIp", ip);
+      jsvUnLock(options);
+  }
+}
+
+void serverListen(JsNetwork *net, JsVar *server, unsigned short port, SocketType socketType) {
   JsVar *arr = socketGetArray(HTTP_ARRAY_HTTP_SERVERS, true);
   if (!arr) return; // out of memory
 
   jsvObjectSetChildAndUnLock(server, HTTP_NAME_PORT, jsvNewFromInteger(port));
+  JsVar *options = jsvObjectGetChild(server, HTTP_NAME_OPTIONS_VAR, false);
 
-  int sckt = netCreateSocket(net, 0/*server*/, (unsigned short)port, ST_NORMAL, 0 /*options*/);
+  int sckt = netCreateSocket(net, socketType, 0/*server*/, port, options);
   if (sckt<0) {
     jsExceptionHere(JSET_INTERNALERROR, "Unable to create socket\n");
     jsvObjectSetChildAndUnLock(server, HTTP_NAME_CLOSENOW, jsvNewFromBool(true));
   } else {
     jsvObjectSetChildAndUnLock(server, HTTP_NAME_SOCKET, jsvNewFromInteger(sckt+1));
-    // add to list of servers
-    jsvArrayPush(arr, server);
+
+    if ((socketType&ST_TYPE_MASK)==ST_UDP) {
+      JsVar *serverConns = socketGetArray(HTTP_ARRAY_HTTP_SERVER_CONNECTIONS, true);
+      if (serverConns) {
+        jsvArrayPush(serverConns, server);
+        jsvUnLock(serverConns);
+      }
+    } else {
+      // add to list of servers
+      jsvArrayPush(arr, server);
+    }
   }
-  jsvUnLock(arr);
+
+  DBG("serverListen port=%d (%d)", port, sckt);
+  jsvUnLock2(options, arr);
 }
 
 void serverClose(JsNetwork *net, JsVar *server) {
@@ -715,6 +808,8 @@ JsVar *clientRequestNew(SocketType socketType, JsVar *options, JsVar *callback) 
     res = jspNewObject(0, "httpCRs");
     if (!res) { jsvUnLock(arr); return 0; } // out of memory?
     req = jspNewObject(0, "httpCRq");
+  } else if ((socketType&ST_TYPE_MASK)==ST_UDP) {
+    req = jspNewObject(0, "dgramSocket");
   } else {
     req = jspNewObject(0, "Socket");
   }
@@ -732,8 +827,13 @@ JsVar *clientRequestNew(SocketType socketType, JsVar *options, JsVar *callback) 
   return req;
 }
 
-void clientRequestWrite(JsNetwork *net, JsVar *httpClientReqVar, JsVar *data) {
+void clientRequestWrite(JsNetwork *net, JsVar *httpClientReqVar, JsVar *data, JsVar *host, unsigned short portNumber) {
+  if (!_socketConnectionOpen(httpClientReqVar)) {
+    jsExceptionHere(JSET_ERROR, "This socket is closed.");
+    return;
+  }
   SocketType socketType = socketGetType(httpClientReqVar);
+
   // Append data to sendData
   JsVar *sendData = jsvObjectGetChild(httpClientReqVar, HTTP_NAME_SEND_DATA, 0);
   if (!sendData) {
@@ -746,7 +846,7 @@ void clientRequestWrite(JsNetwork *net, JsVar *httpClientReqVar, JsVar *data) {
       // We're an HTTP client - make a header
       JsVar *method = jsvObjectGetChild(options, "method", 0);
       JsVar *path = jsvObjectGetChild(options, "path", 0);
-      sendData = jsvVarPrintf("%v %v HTTP/1.0\r\nUser-Agent: Espruino "JS_VERSION"\r\nConnection: close\r\n", method, path);
+      sendData = jsvVarPrintf("%v %v HTTP/1.1\r\nUser-Agent: Espruino "JS_VERSION"\r\nConnection: close\r\n", method, path);
       jsvUnLock2(method, path);
       JsVar *headers = jsvObjectGetChild(options, "headers", 0);
       bool hasHostHeader = false;
@@ -790,6 +890,17 @@ void clientRequestWrite(JsNetwork *net, JsVar *httpClientReqVar, JsVar *data) {
         // prefixed with the length
         jsvAppendPrintf(sendData, "%x\r\n%v\r\n", jsvGetStringLength(s), s);
       } else {
+        if ((socketType&ST_TYPE_MASK) == ST_UDP) {
+          char hostName[128];
+          jsvGetString(host, hostName, sizeof(hostName));
+          uint32_t host_addr = 0;
+          uint16_t size = jsvGetStringLength(s);
+          networkGetHostByName(net, hostName, &host_addr);
+          jsvAppendStringBuf(sendData, (const char*)&host_addr, sizeof(host_addr));
+          jsvAppendStringBuf(sendData, (const char*)&portNumber, sizeof(portNumber));
+          jsvAppendStringBuf(sendData, (const char*)&size, sizeof(size));
+        }
+
         jsvAppendStringVarComplete(sendData,s);
       }
       jsvUnLock(s);
@@ -838,10 +949,11 @@ void clientRequestConnect(JsNetwork *net, JsVar *httpClientReqVar) {
     if (port==0) port = 443;
   }
 #endif
+  if ((socketType&ST_TYPE_MASK) == ST_HTTP) {
+    if (port==0) port = 80;
+  }
 
-  if (port==0) port = 80;
-
-  int sckt =  netCreateSocket(net, host_addr, port, socketType, options);
+  int sckt =  netCreateSocket(net, socketType, host_addr, port, options);
   if (sckt<0) {
     jsExceptionHere(JSET_INTERNALERROR, "Unable to create socket\n");
     // As this is already in the list of connections, an error will be thrown on idle anyway
@@ -866,7 +978,7 @@ void clientRequestEnd(JsNetwork *net, JsVar *httpClientReqVar) {
     }
     // on HTTP, this actually means we connect
     // force sendData to be made
-    clientRequestWrite(net, httpClientReqVar, finalData);
+    clientRequestWrite(net, httpClientReqVar, finalData, NULL, 0);
     jsvUnLock(finalData);
   } else {
     // on normal sockets, we actually request close after all data sent
@@ -894,7 +1006,7 @@ void serverResponseWriteHead(JsVar *httpServerResponseVar, int statusCode, JsVar
     return;
   }
 
-  sendData = jsvVarPrintf("HTTP/1.0 %d OK\r\nServer: Espruino "JS_VERSION"\r\n", statusCode);
+  sendData = jsvVarPrintf("HTTP/1.1 %d OK\r\nServer: Espruino "JS_VERSION"\r\n", statusCode);
   if (headers) httpAppendHeaders(sendData, headers);
   // finally add ending newline
   jsvAppendString(sendData, "\r\n");
@@ -903,6 +1015,10 @@ void serverResponseWriteHead(JsVar *httpServerResponseVar, int statusCode, JsVar
 
 
 void serverResponseWrite(JsVar *httpServerResponseVar, JsVar *data) {
+  if (!_socketConnectionOpen(httpServerResponseVar)) {
+    jsExceptionHere(JSET_ERROR, "This socket is closed.");
+    return;
+  }
   // Append data to sendData
   JsVar *sendData = jsvObjectGetChild(httpServerResponseVar, HTTP_NAME_SEND_DATA, 0);
   if (!sendData) {

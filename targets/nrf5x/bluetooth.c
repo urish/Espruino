@@ -347,9 +347,9 @@ static void on_ble_evt(ble_evt_t * p_ble_evt) {
     switch (p_ble_evt->header.evt_id) {
       case BLE_GAP_EVT_TIMEOUT:
 #if CENTRAL_LINK_COUNT>0
-        if (bleInTask(BLETASK_BONDING)) // BLE_GAP_TIMEOUT_SRC_SECURITY_REQUEST ?
+        if (bleInTask(BLETASK_BONDING)) { // BLE_GAP_TIMEOUT_SRC_SECURITY_REQUEST ?
           bleCompleteTaskFailAndUnLock(BLETASK_BONDING, jsvNewFromString("Connection Timeout"));
-        if (bleInTask(BLETASK_CONNECT)) {
+        } else if (bleInTask(BLETASK_CONNECT)) {
           // timeout!
           bleCompleteTaskFailAndUnLock(BLETASK_CONNECT, jsvNewFromString("Connection Timeout"));
         } else
@@ -617,9 +617,8 @@ static void on_ble_evt(ble_evt_t * p_ble_evt) {
           jsvObjectSetChildAndUnLock(evt, "rssi", jsvNewFromInteger(p_adv->rssi));
           //jsvObjectSetChildAndUnLock(evt, "addr_type", jsvNewFromInteger(p_adv->peer_addr.addr_type));
           jsvObjectSetChildAndUnLock(evt, "id", bleAddrToStr(p_adv->peer_addr));
-          JsVar *data = jsvNewStringOfLength(p_adv->dlen);
+          JsVar *data = jsvNewStringOfLength(p_adv->dlen, (char*)p_adv->data);
           if (data) {
-            jsvSetString(data, (char*)p_adv->data, p_adv->dlen);
             JsVar *ab = jsvNewArrayBufferFromString(data, p_adv->dlen);
             jsvUnLock(data);
             jsvObjectSetChildAndUnLock(evt, "data", ab);
@@ -637,9 +636,8 @@ static void on_ble_evt(ble_evt_t * p_ble_evt) {
         // We got a param write event - add this to the object callback queue
         JsVar *evt = jsvNewObject();
         if (evt) {
-          JsVar *data = jsvNewStringOfLength(p_evt_write->len);
+          JsVar *data = jsvNewStringOfLength(p_evt_write->len, (char*)p_evt_write->data);
           if (data) {
-            jsvSetString(data, (char*)p_evt_write->data, p_evt_write->len);
             JsVar *ab = jsvNewArrayBufferFromString(data, p_evt_write->len);
             jsvUnLock(data);
             jsvObjectSetChildAndUnLock(evt, "data", ab);

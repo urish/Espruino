@@ -1,4 +1,23 @@
-            Allow Espruino boards to reset straight out of the DFU Bootloader             
+            nRF5x: Swap to UART fifo to avoid overrun errors at high baud rates
+            Ensure Exceptions/errors are reported on a blank line
+            Internal: Added initialiser argument to jsvNewStringOfLength
+            Internal: Added jsvObjectSetChildVar/jsvObjectSetChildVar/jsvObjectSetChildVar
+            Internal: Fix jsvCopy if given a NAME_INT/etc
+            Added ES6's Object.assign
+            nRF5x: NRF.setScan now reads service data automatically
+            nRF5x: NRF.findDevices aggregates data from multiple advertising packets
+            nRF5x: Remove app_uart and use nrf_drv_uart with double buffering - fix uart overflow errors (fix #1238)
+            nRF5x: Fix issue with findDevices/setScan servicedata when all digits of service are numbers (eg "1809")
+            Fix memory leak in tab completion code
+            Add `E.errorFlag` event to allow JS to respond to internal errors
+            Use Esc[J VT100 code when cycling through command history (much faster REPL on low bandwidth connections)
+            ESP8266: Remove debugger again as it will never work on 8266
+            ESP8266: Enable unaligned reads for ESP8266_4MB (fix #1240,#837)
+            ESP8266: move code save section to fist partition for memory mapping for ESP8266_4MB (fix #1240)
+            ESP8266: Add GPIO16 as D16 without watch (#1206) but soft PWM/I2C/SPI/etc 
+            ESP8266: Remove osprintf for RELEASE=1 
+
+     1v94 : Allow Espruino boards to reset straight out of the DFU Bootloader             
             Improvements in handling errors in code running in IRQs
              - if writing to disconnected Bluetooth device, throw data away immediately
              - Drop chars if output buffer is full while waiting in an IRQ
@@ -7,7 +26,6 @@
             On nRF52 devices, allow button press at boot to clear out peer manager data
             Work out length of typed array with offset correctly (fix #1204)
             nRF5x: Add Watchdog timer handling
-            Allow IRQs during STM32 neopixel send
             nRF52: start new connections on idle to ease memory allocation conflicts between code execution & IRQs
             nRF52: Ignore INVALID_STATE from CONN_PARAM_UPDATE_REQUEST (it can happen if we disconnect and then SD requests an update)
             Fix Date.toString for dates before 1970
@@ -18,6 +36,28 @@
             Remove 'out of memory' warning messages (it's stored as a flag anyway)
             nRF5x: Don't disable IRQs completely for some things - only disable Espruino ones
             Fix tab complete for Pins (fix #1213)
+            ESP8266: Fix load() causes endless loops (fix #1037)
+            ESP8266: Wifi library doesn't handle {password: null} (fix #753)
+            ESP8266: make topstrings and topreadonly work on Mac OS X (fix #1210)
+            Change order of execution for init - E.on('init',...) now executed before onInit
+            Added Error flag to show if a UART overflow has occurred
+            Change more instances of jsWarn to jsException
+            Avoid printing error messages during execution, and report to console on idle when if errors were flagged (fix #766)
+            Increase HTTP server and client version from 1.0 to 1.1 (needed for Websockets on Safari)
+            Stop 'require' creating an undefined Module entry in the modules list (fix #1218)
+            Stop require dumping filesystem errors as well as 'module not found'
+            Now throw an exception when writing to a closed socket (fix #1220)
+            Set the internal 'conn' variable to false when a connection closes to avoid confusion
+            nRF5x: Fix typo so we wake every 4 min for RTC, not 0.25 sec!
+            process.memory() now reports time taken for GC and vars GC'd
+            Slightly more aggressive idle GC on most platforms (at 5% free)
+            Don't warn the user when we had to run a GC pass during execution
+            Fix issue drawing on right-hand side of rotated graphics where H>W (regression in 1v93) 
+            If >1 button, set pin state correctly at boot/reset
+            Add an argument to `reset`. `reset(true)` will now cause all Flash memory to be cleared as well.
+            Puck.js: Holding down the button while booting (past the the 5 LED flashes) will now cause data saved in Flash to be cleared
+            STM32: Remove the 'utility timer' from the list of available PWM pins, fixing A0/1/2 PWM on F4 (fix #1229)
+            Disable Graphics.createCallback on devices with small amounts of flash memory - rarely used on those devices and fixes HYSTM32_28 build
 
      1v93 : Ensure that specifying too many advertising UUIDs causes an exception, not a reboot
             nRF5x: Fix for time jump caused by reentrancy in jshGetSystemTime

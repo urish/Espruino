@@ -279,8 +279,12 @@ SOURCES += \
 libs/compression/compress_rle.c
 
 else
+
+ifneq ($(FAMILY),ESP8266)
 # If we have enough flash, include the debugger
+# ESP8266 can't do it because it expects tasks to finish within set time
 DEFINES+=-DUSE_DEBUGGER
+endif
 # Use use tab complete
 DEFINES+=-DUSE_TAB_COMPLETE
 
@@ -614,6 +618,13 @@ ifdef USE_HEXBADGE
   WRAPPERSOURCES += libs/hexbadge/jswrap_hexbadge.c
 endif
 
+ifdef USE_WIO_LTE
+  INCLUDE += -I$(ROOT)/libs/wio_lte
+  WRAPPERSOURCES += libs/wio_lte/jswrap_wio_lte.c
+  SOURCES += targets/stm32/stm32_ws2812b_driver.c
+endif
+
+
 ifdef WICED
   WRAPPERSOURCES += targets/emw3165/jswrap_emw3165.c
 endif
@@ -786,7 +797,7 @@ endif
 
 clean:
 	@echo Cleaning targets
-	$(Q)find . -name \*.o | grep -v arm-bcm2708 | xargs rm -f
+	$(Q)find . -name \*.o | grep -v "./arm-bcm2708\|./gcc-arm-none-eabi" | xargs rm -f
 	$(Q)rm -f $(ROOT)/gen/*.c $(ROOT)/gen/*.h $(ROOT)/gen/*.ld
 	$(Q)rm -f $(ROOT)/scripts/*.pyc $(ROOT)/boards/*.pyc
 	$(Q)rm -f $(PROJ_NAME).elf
