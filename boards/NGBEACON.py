@@ -61,8 +61,8 @@ chip = {
 };
 
 devices = {
-  'BTN1' : { 'pin' : 'D17', 'inverted' : True, 'pinstate' : 'IN_PULLUP'},
-  'LED1':  { 'pin' : 'D26', 'inverted' : True },
+  'BTN1' : { 'pin' : 'D25', 'inverted' : True, 'pinstate' : 'IN_PULLUP'},
+  'LED1':  { 'pin' : 'D19', 'inverted' : True },
   'LED2':  { 'pin' : 'D15' },
   'LED3':  { 'pin' : 'D14' },
   'RX_PIN_NUMBER' : { 'pin' : 'D8'},
