@@ -23,11 +23,8 @@
 #include "nrf_soc.h"
 #include "nrf_drv_spi.h"
 
-#define LATCH1_PIN            3
-#define LATCH2_PIN            4
-
-#define SPI0_CONFIG_SCK_PIN   28
-#define SPI0_CONFIG_MOSI_PIN  27
+#define SPI0_CONFIG_SCK_PIN   6
+#define SPI0_CONFIG_MOSI_PIN  7
 #define LED_COUNT             10
 #define FRAME_SIZE            (LED_COUNT * 3)
 
