@@ -4,6 +4,7 @@ language: c
 
 before_script:
  - source ./scripts/provision.sh $BOARD
+ - python --version
 
 after_script:
   - ls *.bin *.hex *.tgz *.zip | xargs -I {} curl -v -F "binary=@{}" "http://www.espruino.com/travis_upload.php?commit=$TRAVIS_COMMIT"
@@ -49,6 +50,8 @@ env:
     - BOARD=EFM32GGSTK
     - BOARD=NUCLEOL476RG
     - BOARD=RUUVITAG DFU_UPDATE_BUILD=1
+    - BOARD=WIO_LTE
+    - BOARD=HEXBADGE DFU_UPDATE_BUILD=1
 
 script: make
 

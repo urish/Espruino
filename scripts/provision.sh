@@ -32,6 +32,9 @@ FAMILY=`scripts/get_board_info.py $BOARDNAME 'board.chip["family"]'`
 
 if [ $FAMILY = "ESP32" ]; then
     echo ESP32
+    # needed for esptool for merging binaries
+    python -m pip install pyserial
+    # SDK
     if [ ! -d "app" ]; then
         echo installing app folder
         curl -Ls https://github.com/espruino/EspruinoBuildTools/raw/master/esp32/deploy/app.tgz | tar xfz -
@@ -95,6 +98,8 @@ elif [ $FAMILY = "STM32F4" ]; then
 elif [ $FAMILY = "STM32L4" ]; then
     ARM=1
 elif [ $FAMILY = "EFM32GG" ]; then
+    ARM=1
+elif [ $FAMILY = "SAMD" ]; then
     ARM=1
 else
     echo "Unknown board ($BOARDNAME) or family ($FAMILY)"
