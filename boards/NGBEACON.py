@@ -17,7 +17,7 @@ import pinutils;
 
 info = {
  'name' : "NGBeacon",
- 'link' :  [ "https://www.nordicsemi.com/Products/Bluetooth-Smart-Bluetooth-low-energy/nRF51822" ],
+ 'link' :  [ "https://www.nordicsemi.com/Products/Bluetooth-Smart-Bluetooth-low-energy/nRF52832" ],
  'default_console' : "EV_BLUETOOTH",
  'default_console_tx' : "D9",
  'default_console_rx' : "D8",
