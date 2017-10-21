@@ -201,3 +201,20 @@ uint32_t jswrap_schedule_frames(JsVar *frames, JsVarFloat interval) {
 
   return len;
 }
+
+/*JSON{
+    "type" : "staticmethod",
+    "class" : "spinner",
+    "name" : "stop",
+    "ifdef" : "NGBEACON",
+    "generate" : "jswrap_stop_frames"
+}*/
+void jswrap_stop_frames(void) {
+  if (frameData) {
+    jsvUnLock(frameData);
+    frameData = NULL;
+    frameDataPtr = NULL;
+  }
+  
+  jstStopExecuteFn(drawFrame, NULL);
+}
