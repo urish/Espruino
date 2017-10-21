@@ -66,8 +66,8 @@ int jswrap_ngbeacon_start() {
   nrf_drv_spi_config_t config = NRF_DRV_SPI_DEFAULT_CONFIG;
   config.sck_pin   = SPI0_CONFIG_SCK_PIN;
   config.mosi_pin  = SPI0_CONFIG_MOSI_PIN;
-  config.frequency = NRF_DRV_SPI_FREQ_1M;
-  config.mode      = NRF_DRV_SPI_MODE_1;
+  config.frequency = NRF_DRV_SPI_FREQ_8M;
+  config.mode      = NRF_DRV_SPI_MODE_3;
   config.bit_order = NRF_DRV_SPI_BIT_ORDER_MSB_FIRST;
   uint32_t rc = nrf_drv_spi_init(&m_spi_master_0, &config, NULL);
   if (rc == NRF_SUCCESS) {
