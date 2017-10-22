@@ -175,6 +175,7 @@ void jswrap_spinner_dfu() {
 uint32_t jswrap_schedule_frames(JsVar *frames, JsVarFloat interval) {
   // TODO ensure frames is actually an Array buffer 
   // TODO jsvGetArrayBufferLength(frames) % FRAME_SIZE == 0, length > 0 (RGB * 10 LEDS)
+  // TODO check interval >= 0.123, otherwise we kill the event loop
   uint32_t len = jsvGetArrayBufferLength(frames);
   if (len == 0) {
     return len;
