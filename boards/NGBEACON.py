@@ -34,6 +34,7 @@ info = {
    ],
    'makefile' : [
      'DFU_PRIVATE_KEY=targets/nrf5x_dfu/ngbeacon_dfu_key.pem',
+     'DEFINES+=-DBLUETOOTH_NAME_PREFIX=\'"ng-beacon"\'',
      'DFU_SETTINGS=--application-version 0xff --hw-version 52 --sd-req 0x8C'
    ]
  }
