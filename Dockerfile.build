@@ -1,0 +1,22 @@
+FROM ubuntu:16.04
+
+RUN apt-get update
+RUN apt-get install -y python sudo curl git software-properties-common python-software-properties
+RUN add-apt-repository ppa:team-gcc-arm-embedded/ppa
+RUN apt-get update
+RUN apt-get install -y gcc-arm-embedded
+
+# Checkout just the scripts to install the build dependencies
+RUN mkdir /espruino
+WORKDIR /espruino
+RUN git init
+RUN git remote add origin https://github.com/espruino/Espruino
+RUN git config core.sparseCheckout true
+RUN echo "boards/" >> .git/info/sparse-checkout
+RUN echo "scripts/" >> .git/info/sparse-checkout
+RUN git pull --depth=1 origin master
+
+RUN bash -c 'source scripts/provision.sh PUCKJS'
+
+ENV BOARD NGBEACON
+ENV RELEASE 1
