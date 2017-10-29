@@ -180,6 +180,8 @@ uint32_t jswrap_schedule_frames(JsVar *frames, JsVarFloat interval) {
   if (len == 0) {
     return len;
   }
+
+  jstStopExecuteFn(drawFrame, NULL);
   
   if (frameData) {
     jsvUnLock(frameData);
@@ -197,10 +199,26 @@ uint32_t jswrap_schedule_frames(JsVar *frames, JsVarFloat interval) {
   }
 
   JsSysTime frameTime = jshGetTimeFromMilliseconds(interval);
-  jstStopExecuteFn(drawFrame, NULL);
   jstExecuteFn(drawFrame, NULL, jshGetSystemTime() + frameTime, frameTime);
 
   return len;
+}
+
+/*JSON{
+    "type" : "staticmethod",
+    "class" : "spinner",
+    "name" : "reschedule",
+    "ifdef" : "NGBEACON",
+    "generate" : "jswrap_reschedule_frames",
+    "params" : [
+      ["interval", "float", "interval"]
+    ]
+}*/
+void jswrap_reschedule_frames(JsVarFloat interval) {
+  JsSysTime frameTime = jshGetTimeFromMilliseconds(interval);
+  jstStopExecuteFn(drawFrame, NULL);
+  jstExecuteFn(drawFrame, NULL, jshGetSystemTime() + frameTime, frameTime);
+  drawFrame(0, NULL);
 }
 
 /*JSON{
@@ -211,11 +229,10 @@ uint32_t jswrap_schedule_frames(JsVar *frames, JsVarFloat interval) {
     "generate" : "jswrap_stop_frames"
 }*/
 void jswrap_stop_frames(void) {
+  jstStopExecuteFn(drawFrame, NULL);
   if (frameData) {
     jsvUnLock(frameData);
     frameData = NULL;
     frameDataPtr = NULL;
   }
-  
-  jstStopExecuteFn(drawFrame, NULL);
 }

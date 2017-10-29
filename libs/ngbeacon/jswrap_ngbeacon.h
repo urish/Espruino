@@ -19,4 +19,5 @@ int jswrap_ngbeacon_write();
 void jswrap_ngbeacon_clear(bool write);
 void jswrap_spinner_dfu();
 uint32_t jswrap_schedule_frames(JsVar *frames, JsVarFloat interval);
+void jswrap_reschedule_frames(JsVarFloat interval);
 void jswrap_stop_frames();
