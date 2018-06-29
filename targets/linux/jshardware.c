@@ -26,6 +26,7 @@
  #include <signal.h>
  #include <inttypes.h>
 
+#include "platform_config.h"
 #include "jshardware.h"
 #include "jsutils.h"
 #include "jsparse.h"
@@ -34,8 +35,14 @@
 #include <pthread.h>
 
 #define FAKE_FLASH_FILENAME  "espruino.flash"
-#define FAKE_FLASH_BLOCKSIZE 4096
-#define FAKE_FLASH_BLOCKS    16
+#define FAKE_FLASH_BLOCKSIZE FLASH_PAGE_SIZE
+#define FAKE_FLASH_BLOCKS    (FLASH_TOTAL/FLASH_PAGE_SIZE)
+
+#ifndef FLASH_64BITS_ALIGNMENT
+#define FLASH_UNITARY_WRITE_SIZE 4
+#else
+#define FLASH_UNITARY_WRITE_SIZE 8
+#endif
 
 #ifdef USE_WIRINGPI
 // see http://wiringpi.com/download-and-install/
@@ -94,7 +101,7 @@ void sysfs_read(const char *path, char *data, unsigned int len) {
 JsVarInt sysfs_read_int(const char *path) {
   char buf[20];
   sysfs_read(path, buf, sizeof(buf));
-  return stringToIntWithRadix(buf, 10, 0);
+  return stringToIntWithRadix(buf, 10, NULL, NULL);
 }
 #endif
 // ----------------------------------------------------------------------------
@@ -386,7 +393,7 @@ int jshGetSerialNumber(unsigned char *data, int maxChars) {
       if (strncmp(line, "Serial", 6) == 0) {
         char serial_string[16 + 1];
         strcpy(serial_string, strchr(line, ':') + 2);
-        serial = stringToIntWithRadix(serial_string, 16, 0);
+        serial = stringToIntWithRadix(serial_string, 16, NULL, NULL);
       }
     }
     fclose(f);
@@ -815,9 +822,11 @@ JsVarFloat jshReadVRef()  { return NAN; };
 unsigned int jshGetRandomNumber() { return rand(); }
 
 bool jshFlashGetPage(uint32_t addr, uint32_t *startAddr, uint32_t *pageSize) {
-  if (addr > (FAKE_FLASH_BLOCKSIZE * FAKE_FLASH_BLOCKS))
+  if (addr < FLASH_START)
+    return false;
+  if (addr >= FLASH_START+(FAKE_FLASH_BLOCKSIZE * FAKE_FLASH_BLOCKS))
       return false;
-  *startAddr = (uint32_t) (floor(addr / FAKE_FLASH_BLOCKSIZE) * FAKE_FLASH_BLOCKSIZE);
+  *startAddr = (uint32_t)(floor(addr / FAKE_FLASH_BLOCKSIZE) * FAKE_FLASH_BLOCKSIZE);
   *pageSize = FAKE_FLASH_BLOCKSIZE;
   return true;
 }
@@ -827,14 +836,15 @@ JsVar *jshFlashGetFree() {
   uint32_t pAddr, pSize;
   JsVar *jsArea = jsvNewObject();
   if (!jsArea) return jsFreeFlash;
-  jsvObjectSetChildAndUnLock(jsArea, "addr", jsvNewFromInteger(0));
+  jsvObjectSetChildAndUnLock(jsArea, "addr", jsvNewFromInteger(FLASH_START));
   jsvObjectSetChildAndUnLock(jsArea, "length", jsvNewFromInteger(FAKE_FLASH_BLOCKSIZE*FAKE_FLASH_BLOCKS));
   jsvArrayPushAndUnLock(jsFreeFlash, jsArea);
   return jsFreeFlash;
 }
 
-static FILE *jshFlashOpenFile() {
+static FILE *jshFlashOpenFile(bool dontCreate) {
   FILE *f = fopen(FAKE_FLASH_FILENAME, "r+b");
+  if (!f && dontCreate) return 0;
   if (!f) f = fopen(FAKE_FLASH_FILENAME, "wb");
   if (!f) return 0;
   int len = FAKE_FLASH_BLOCKSIZE*FAKE_FLASH_BLOCKS;
@@ -850,10 +860,11 @@ static FILE *jshFlashOpenFile() {
   return f;
 }
 void jshFlashErasePage(uint32_t addr) {
-  FILE *f = jshFlashOpenFile();
-  if (!f) return;
+  FILE *f = jshFlashOpenFile(true);
+  if (!f) return; // if no file and we're erasing, we don't have to do anything
   uint32_t startAddr, pageSize;
   if (jshFlashGetPage(addr, &startAddr, &pageSize)) {
+    startAddr -= FLASH_START;
     fseek(f, startAddr, SEEK_SET);
     char *buf = malloc(pageSize);
     memset(buf, 0xFF, pageSize);
@@ -863,28 +874,65 @@ void jshFlashErasePage(uint32_t addr) {
   fclose(f);
 }
 void jshFlashRead(void *buf, uint32_t addr, uint32_t len) {
-  FILE *f = jshFlashOpenFile();
-  if (!f) return;
+  //assert(!(addr&(FLASH_UNITARY_WRITE_SIZE-1))); // sanity checks here to mirror real hardware
+  //assert(!(len&(FLASH_UNITARY_WRITE_SIZE-1))); // sanity checks here to mirror real hardware
+  if (addr<FLASH_START || addr>=FLASH_START+FLASH_TOTAL) {
+    assert(0); // out of range
+    return;
+  }
+  addr -= FLASH_START;
+
+  FILE *f = jshFlashOpenFile(true);
+  if (!f) { // no file, so it's all 0xFF
+    memset(buf, 0xFF, len);
+    return;
+  }
   fseek(f, addr, SEEK_SET);
   fread(buf, 1, len, f);
   fclose(f);
 }
 void jshFlashWrite(void *buf, uint32_t addr, uint32_t len) {
-  FILE *f = jshFlashOpenFile();
+  uint32_t i;
+  assert(!(addr&(FLASH_UNITARY_WRITE_SIZE-1))); // sanity checks here to mirror real hardware
+  assert(!(len&(FLASH_UNITARY_WRITE_SIZE-1))); // sanity checks here to mirror real hardware
+
+  /*jsiConsolePrintf("%08x ", addr);
+  for (i=0;i<len;i++)
+    jsiConsolePrintf("%02x ", (int)((unsigned char*)buf)[i]);
+  jsiConsolePrintf("\n");*/
+
+  if (addr<FLASH_START || addr>=FLASH_START+FLASH_TOTAL) {
+    assert(0); // out of range
+    return;
+  }
+  addr -= FLASH_START;
+
+  FILE *f = jshFlashOpenFile(false);
   if (!f) return;
 
   char *wbuf = malloc(len);
   fseek(f, addr, SEEK_SET);
   fread(wbuf, 1, len, f);
-  uint32_t i;
-  for (i=0;i<len;i++)
+
+  for (i=0;i<len;i++) {
+    //jsiConsolePrintf("Write %d to 0x%08x\n", ((char*)buf)[i], FLASH_START+addr+i);
     wbuf[i] &= ((char*)buf)[i];
+  }
   fseek(f, addr, SEEK_SET);
   fwrite(wbuf, 1, len, f);
   free(wbuf);
+  //fsync(f);
   fclose(f);
 }
 
+// Just pass data through, since we can access flash at the same address we wrote it
+size_t jshFlashGetMemMapAddress(size_t ptr) { return ptr; }
+
 unsigned int jshSetSystemClock(JsVar *options) {
   return 0;
+}
+
+/// Perform a proper hard-reboot of the device
+void jshReboot() {
+  jsExceptionHere(JSET_ERROR, "Not implemented");
 }

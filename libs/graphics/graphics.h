@@ -59,18 +59,27 @@ typedef struct {
   unsigned char bpp;
   unsigned int fgColor, bgColor; ///< current foreground and background colors
   short fontSize; ///< See JSGRAPHICS_FONTSIZE_ constants
+#ifndef SAVE_ON_FLASH
+  unsigned char fontAlignX : 2;
+  unsigned char fontAlignY : 2;
+  unsigned char fontRotate : 2;
+#endif
   short cursorX, cursorY; ///< current cursor positions
+#ifndef SAVE_ON_FLASH
   short modMinX, modMinY, modMaxX, modMaxY; ///< area that has been modified
+#endif
 } PACKED_FLAGS JsGraphicsData;
 
 typedef struct JsGraphics {
   JsVar *graphicsVar; // this won't be locked again - we just know that it is already locked by something else
   JsGraphicsData data;
   unsigned char _blank; ///< this is needed as jsvGetString for 'data' wants to add a trailing zero
+  void *backendData; ///< Data used by the graphics backend
 
   void (*setPixel)(struct JsGraphics *gfx, short x, short y, unsigned int col);
   void (*fillRect)(struct JsGraphics *gfx, short x1, short y1, short x2, short y2);
   unsigned int (*getPixel)(struct JsGraphics *gfx, short x, short y);
+  void (*scroll)(struct JsGraphics *gfx, int xdir, int ydir); // scroll - leave unscrolled area undefined
 } PACKED_FLAGS JsGraphics;
 
 static inline void graphicsStructInit(JsGraphics *gfx) {
@@ -79,12 +88,19 @@ static inline void graphicsStructInit(JsGraphics *gfx) {
   gfx->data.fgColor = 0xFFFFFFFF;
   gfx->data.bgColor = 0;
   gfx->data.fontSize = JSGRAPHICS_FONTSIZE_4X6;
+#ifndef SAVE_ON_FLASH
+  gfx->data.fontAlignX = 3;
+  gfx->data.fontAlignY = 3;
+  gfx->data.fontRotate = 0;
+#endif
   gfx->data.cursorX = 0;
   gfx->data.cursorY = 0;
+#ifndef SAVE_ON_FLASH
   gfx->data.modMaxX = -32768;
   gfx->data.modMaxY = -32768;
   gfx->data.modMinX = 32767;
   gfx->data.modMinY = 32767;
+#endif
 }
 
 // ---------------------------------- these are in graphics.c
@@ -92,6 +108,10 @@ static inline void graphicsStructInit(JsGraphics *gfx) {
 bool graphicsGetFromVar(JsGraphics *gfx, JsVar *parent);
 void graphicsSetVar(JsGraphics *gfx);
 // ----------------------------------------------------------------------------------------------
+/// Get the memory requires for this graphics's pixels if everything was packed as densely as possible
+size_t graphicsGetMemoryRequired(const JsGraphics *gfx);
+// If graphics is flipped or rotated then the coordinates need modifying
+void graphicsToDeviceCoordinates(const JsGraphics *gfx, short *x, short *y);
 // drawing functions - all coordinates are in USER coordinates, not DEVICE coordinates
 void         graphicsSetPixel(JsGraphics *gfx, short x, short y, unsigned int col);
 unsigned int graphicsGetPixel(JsGraphics *gfx, short x, short y);
@@ -108,6 +128,11 @@ void graphicsFillPoly(JsGraphics *gfx, int points, short *vertices); // may over
 unsigned int graphicsFillVectorChar(JsGraphics *gfx, short x1, short y1, short size, char ch); ///< prints character, returns width
 unsigned int graphicsVectorCharWidth(JsGraphics *gfx, short size, char ch); ///< returns the width of a character
 #endif
+/// Draw a simple 1bpp image in foreground colour
+void graphicsDrawImage1bpp(JsGraphics *gfx, short x1, short y1, short width, short height, const unsigned char *pixelData);
+/// Scroll the graphics device (in user coords). X>0 = to right, Y >0 = down
+void graphicsScroll(JsGraphics *gfx, int xdir, int ydir);
+
 void graphicsSplash(JsGraphics *gfx); ///< splash screen
 
 void graphicsIdle(); ///< called when idling

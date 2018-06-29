@@ -33,7 +33,10 @@ info = {
    ],
    'makefile' : [
      'SAVE_ON_FLASH=1',
+     'DEFINES+=-DCONFIG_GPIO_AS_PINRESET', # Allow the reset pin to work
      'DEFINES+=-DUSE_DEBUGGER -DUSE_TAB_COMPLETE',
+     'INCLUDE += -I$(ROOT)/libs/microbit',
+     'WRAPPERSOURCES += libs/microbit/jswrap_microbit.c'
    ]
  }
 };
@@ -52,16 +55,16 @@ chip = {
    # If using DFU bootloader, it sits at 0x3C000 - 0x40000 (0x40000 is end of flash)
    # Might want to change 256 -> 240 in the code below
   'saved_code' : {
-    'address' : ((256 - 3) * 1024),
+    'address' : ((256 - 2) * 1024),
     'page_size' : 1024,
-    'pages' : 3,
-    'flash_available' : (256 - 108 - 3) # total flash pages - softdevice - saved code
+    'pages' : 2,
+    'flash_available' : (256 - 108 - 2) # total flash pages - softdevice - saved code
   }
 };
 
 devices = {
-  'BTN1' : { 'pin' : 'D5', 'inverted' : True, 'pinstate' : 'IN_PULLUP' }, # 'P0_17'
-  'BTN2' : { 'pin' : 'D11', 'inverted' : True, 'pinstate' : 'IN_PULLUP' }, # 'P0_26'
+  'BTN1' : { 'pin' : 'D5', 'pinstate' : 'IN_PULLDOWN' }, # 'P0_17' -  Pin negated in software
+  'BTN2' : { 'pin' : 'D11', 'pinstate' : 'IN_PULLDOWN' }, # 'P0_26' -  Pin negated in software
 };
 
 # left-right, or top-bottom order
@@ -128,6 +131,9 @@ def get_pins():
    { "name":"PH0", "sortingname":"H0", "port":"D", "num":"24", "functions":{}, "csv":{} },
    { "name":"PH1", "sortingname":"H1", "port":"D", "num":"25", "functions":{}, "csv":{} }
   ];
+  # Make buttons negated
+  pinutils.findpin(pins, "PD5", True)["functions"]["NEGATED"]=0;
+  pinutils.findpin(pins, "PD11", True)["functions"]["NEGATED"]=0;
   # everything is non-5v tolerant
   for pin in pins:
     pin["functions"]["3.3"]=0;

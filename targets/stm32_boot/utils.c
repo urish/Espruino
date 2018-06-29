@@ -35,7 +35,7 @@ static ALWAYS_INLINE uint16_t stmPin(Pin ipin) {
 }
 
 static ALWAYS_INLINE GPIO_TypeDef *stmPort(Pin pin) {
-  JsvPinInfoPort port = pinInfo[pin].port;
+  JsvPinInfoPort port = pinInfo[pin].port&JSH_PORT_MASK;
   return (GPIO_TypeDef *)((char*)GPIOA + (port-JSH_PORTA)*0x0400);
 }
 
@@ -98,6 +98,11 @@ void jshPushIOCharEvent(IOEventFlags channel, char charData) {
   rxBuffer[rxHead] = charData;
   rxHead = (rxHead+1) & BUFFERMASK;
   //if (rxHead == rxTail) weHaveOverFlowed();
+}
+
+void jshPushIOCharEvents(IOEventFlags channel, char *data, unsigned int count) {
+  unsigned int i;
+  for (i=0;i<count;i++) jshPushIOCharEvent(channel, data[i]);
 }
 
 bool jshHasEventSpaceForChars(int n) {

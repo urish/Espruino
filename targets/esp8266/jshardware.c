@@ -1264,15 +1264,15 @@ void jshFlashRead(
 	  uint8_t *dest = buf;
 	  uint32_t bytes = *(uint32_t*)(addr & ~3);
 	  while (len-- > 0) {
-		if ((addr & 3) == 0) bytes = *(uint32_t*)addr;
-		*dest++ = ((uint8_t*)&bytes)[addr++ & 3];
+		  if ((addr & 3) == 0) bytes = *(uint32_t*)addr;
+		  *dest++ = ((uint8_t*)&bytes)[addr++ & 3];
 	  }
-   } else { // Above 1Mb read...
-	//os_printf("jshFlashRead: above 1mb!");
-	SpiFlashOpResult res;
-	res = spi_flash_read(addr, buf, len);
-    if (res != SPI_FLASH_RESULT_OK)
-      os_printf("ESP8266: jshFlashRead %s\n",
+  } else { // Above 1Mb read...
+    //os_printf("jshFlashRead: above 1mb!");
+    SpiFlashOpResult res;
+    res = spi_flash_read(addr, buf, len);
+      if (res != SPI_FLASH_RESULT_OK)
+        os_printf("ESP8266: jshFlashRead %s\n",
     res == SPI_FLASH_RESULT_ERR ? "error" : "timeout");
    }
 }
@@ -1296,9 +1296,25 @@ void jshFlashWrite(
   if (addr >= flash_max) return;
   if (addr + len > flash_max) len = flash_max - addr;
 
-  // since things are guaranteed to be aligned we can just call the SDK :-)
-  SpiFlashOpResult res;
-  res = spi_flash_write(addr, buf, len);
+  SpiFlashOpResult res = SPI_FLASH_RESULT_OK;
+  /* so about that alignment... Turns out it matters
+  about `buf` too */
+  if (((size_t)(char*)buf)&3) {
+    /* Unaligned *SOURCE* is a problem on ESP8266,
+     * so if so we are unaligned, do a whole bunch
+     * of tiny writes via a buffer */
+    while (len>=4 && res == SPI_FLASH_RESULT_OK) {
+      uint32_t alignedBuf;
+      memcpy(&alignedBuf, buf, 4);
+      res = spi_flash_write(addr, &alignedBuf, 4);
+      len -= 4;
+      addr += 4;
+      buf = (void*)(4+(char*)buf);
+    }
+  } else {
+    // since things are *now* guaranteed to be aligned we can just call the SDK :-)
+    res = spi_flash_write(addr, buf, len);
+  }
   if (res != SPI_FLASH_RESULT_OK)
     os_printf("ESP8266: jshFlashWrite %s\n",
       res == SPI_FLASH_RESULT_ERR ? "error" : "timeout");
@@ -1340,12 +1356,9 @@ JsVar *jshFlashGetFree() {
     addFlashArea(jsFreeFlash, 0x300000, 0x40000);
     addFlashArea(jsFreeFlash, 0x340000, 0x40000);
     addFlashArea(jsFreeFlash, 0x380000, 0x40000);
-    addFlashArea(jsFreeFlash, 0x3C0000, 0x40000);
+    addFlashArea(jsFreeFlash, 0x3C0000, 0x40000-0x5000);
     return jsFreeFlash;
   }
-
-  // Area reserved for EEPROM
-  addFlashArea(jsFreeFlash, 0x77000, 0x1000);
 
   // need 1MB of flash to have more space...
   extern uint16_t espFlashKB; // in user_main,c
@@ -1357,10 +1370,10 @@ JsVar *jshFlashGetFree() {
 	  addFlashArea(jsFreeFlash, 0xf7000, 0x5000);
     }
 	if (espFlashKB == 2048) {
-	  addFlashArea(jsFreeFlash, 0x100000, 0x100000-0x4000);
+	  addFlashArea(jsFreeFlash, 0x100000, 0x100000-0x5000);
     }
 	if (espFlashKB == 4096) {
-	  addFlashArea(jsFreeFlash, 0x100000, 0x300000-0x4000);
+	  addFlashArea(jsFreeFlash, 0x100000, 0x300000-0x5000);
     }
   }
 
@@ -1383,6 +1396,14 @@ void jshFlashErasePage(
       res == SPI_FLASH_RESULT_ERR ? "error" : "timeout");
 }
 
+size_t jshFlashGetMemMapAddress(size_t ptr) {
+  // the flash address is just the offset into the flash chip, but to evaluate the code
+  // below we need to jump to the memory-mapped window onto flash, so adjust here
+  if (ptr < FLASH_MAX)
+    return ptr + FLASH_MMAP;
+  return ptr;
+}
+
 unsigned int jshSetSystemClock(JsVar *options) {
   int newFreq = jsvGetInteger(options);
   if (newFreq != 80 && newFreq != 160) {
@@ -1399,4 +1420,11 @@ unsigned int jshSetSystemClock(JsVar *options) {
  * added to satisfy the linker.
  */
 void _exit(int status) {
+}
+
+/// Perform a proper hard-reboot of the device
+void jshReboot() {
+  os_printf("Espruino resetting the esp8266\n");
+  os_delay_us(1000); // time for os_printf to drain
+  system_restart();
 }

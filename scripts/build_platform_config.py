@@ -56,38 +56,35 @@ has_bootloader = False
 if "bootloader" in board.info and board.info["bootloader"]!=0:
   has_bootloader = True
 
-if not LINUX:
+variables=board.info["variables"]
+# variables from board-file can bw overwritten. Be careful with this option.
+# usually the definition in board file are already the maximum, and adding some more will corrupt firmware
+if 'VARIABLES' in os.environ:
+  variables=int(os.environ['VARIABLES'])
+if variables==0: var_size = 16
+elif variables<1023: var_size = 12   # the 'packed bits mean anything under 1023 vars gets into 12 byte JsVars
+else: var_size = 16
+var_cache_size = var_size*variables
+flash_needed = var_cache_size + 4 # for magic number
+print("Variables = "+str(variables))
+print("JsVar size = "+str(var_size))
+print("VarCache size = "+str(var_cache_size))
+
+flash_page_size = 1024
+
+if LINUX:
+  flash_saved_code_pages = 8
+  total_flash = flash_page_size*flash_saved_code_pages  
+else: # NOT LINUX
   # 100xB and 103xB are mid-density, so have 1k page sizes
   if board.chip["part"][:7]=="STM32F1" and board.chip["part"][10]=="B": board.chip["subfamily"]="MD";
 
-  # how much room for stack (and EVERYTHING else)
-  space_for_stack = 4 #kB
-  if board.chip["ram"] > 20: space_for_stack = 5
-  variable_storage = board.chip["ram"] - space_for_stack
-  # work out # of variables
-  # We need to know if we should be using 8 or 16 bit addresses
-  #variables_8bit = (variable_storage*1024 ) / 12
-  #variables_16bit = (variable_storage*1024) / 16
-  #if variables_8bit > 254 and variables_16bit > 254:
-  #  variables = variables_16bit
-  #else:
-  #  variables = variables_8bit
-  # But in some cases we may not have enough flash memory!
-  variables=board.info["variables"]
-# variables from board-file can bw overwritten. Be careful with this option.
-# usually the definition in board file are already the maximum, and adding some more will corrupt firmware
-  if 'VARIABLES' in os.environ:
-    variables=int(os.environ['VARIABLES'])
-
-  var_size = 12 if variables<1023 else 16
-  # the 'packed bits mean anything under 1023 vars gets into 12 byte JsVars
-  var_cache_size = var_size*variables
-  flash_needed = var_cache_size + 4 # for magic number
-  flash_page_size = 1024 # just a guess
-  if board.chip["family"]=="STM32F1": flash_page_size = 1024 if "subfamily" in board.chip and board.chip["subfamily"]=="MD" else 2048
+  if board.chip["family"]=="STM32F1": 
+    flash_page_size = 1024 if "subfamily" in board.chip and board.chip["subfamily"]=="MD" else 2048
   if board.chip["family"]=="STM32F2":
     flash_page_size = 128*1024
-  if board.chip["family"]=="STM32F3": flash_page_size = 2*1024
+  if board.chip["family"]=="STM32F3": 
+    flash_page_size = 2*1024
   if board.chip["family"]=="STM32F4":
     flash_page_size = 128*1024
   if board.chip["family"]=="NRF51":
@@ -102,23 +99,22 @@ if not LINUX:
   # F4 has different page sizes in different places
   total_flash = board.chip["flash"]*1024
 
-  if "saved_code" in board.chip:
-    flash_saved_code_start = board.chip["saved_code"]["address"]
-    flash_page_size = board.chip["saved_code"]["page_size"]
-    flash_saved_code_pages = board.chip["saved_code"]["pages"]
-    flash_available_for_code = board.chip["saved_code"]["flash_available"]*1024
-  else:
-    flash_saved_code_start = "(FLASH_START + FLASH_TOTAL - FLASH_SAVED_CODE_LENGTH)"
-    flash_available_for_code = total_flash - (flash_saved_code_pages*flash_page_size)
-    if has_bootloader: flash_available_for_code -= common.get_bootloader_size(board)
+if "saved_code" in board.chip:
+  flash_saved_code_start = board.chip["saved_code"]["address"]
+  flash_page_size = board.chip["saved_code"]["page_size"]
+  flash_saved_code_pages = board.chip["saved_code"]["pages"]
+  flash_available_for_code = board.chip["saved_code"]["flash_available"]*1024
+else:
+  flash_saved_code_start = "(FLASH_START + FLASH_TOTAL - FLASH_SAVED_CODE_LENGTH)"
+  flash_available_for_code = total_flash - (flash_saved_code_pages*flash_page_size)
+  if has_bootloader: flash_available_for_code -= common.get_bootloader_size(board)
 
-  print("Variables = "+str(variables))
-  print("JsVar size = "+str(var_size))
-  print("VarCache size = "+str(var_cache_size))
-  print("Flash page size = "+str(flash_page_size))
-  print("Flash pages = "+str(flash_saved_code_pages))
-  print("Total flash = "+str(total_flash))
-  print("Flash available for code = "+str(flash_available_for_code))
+
+
+print("Flash page size = "+str(flash_page_size))
+print("Flash pages = "+str(flash_saved_code_pages))
+print("Total flash = "+str(total_flash))
+print("Flash available for code = "+str(flash_available_for_code))
 
 
 # -----------------------------------------------------------------------------------------
@@ -166,8 +162,11 @@ codeOut("#define PC_BOARD_CHIP_FAMILY \""+board.chip["family"]+"\"")
 
 codeOut("")
 
-linker_end_var = "_end";
-linker_etext_var = "_etext";
+# Linker vars used for:
+linker_end_var = "_end";     # End of RAM (eg top of stack)
+linker_etext_var = "_etext"; # End of text (function) section
+# External interrupt count
+exti_count = 16 
 
 if board.chip["family"]=="LINUX":
   board.chip["class"]="LINUX"
@@ -195,13 +194,19 @@ elif board.chip["family"]=="STM32L4":
   codeOut('#include "stm32l4xx_ll_adc.h"')
 elif board.chip["family"]=="NRF51":
   board.chip["class"]="NRF51"
+  linker_etext_var = "__etext";
+  linker_end_var = "end";
+  exti_count = 4
   codeOut('#include "nrf.h"')
 elif board.chip["family"]=="NRF52":
   board.chip["class"]="NRF52"
-  codeOut('#include "nrf.h"') # TRY THIS BUT NOT SURE~!
-elif board.chip["family"]=="EFM32GG":
   linker_etext_var = "__etext";
+  linker_end_var = "end";
+  exti_count = 8
+  codeOut('#include "nrf.h"')
+elif board.chip["family"]=="EFM32GG":
   board.chip["class"]="EFM32"
+  linker_etext_var = "__etext";
   codeOut('#include "em_device.h"')
 elif board.chip["family"]=="LPC1768":
   board.chip["class"]="MBED"
@@ -211,6 +216,7 @@ elif board.chip["family"]=="ESP8266":
   board.chip["class"]="ESP8266"
 elif board.chip["family"]=="ESP32":
   board.chip["class"]="ESP32"
+  exti_count = 40
 elif board.chip["family"]=="SAMD":
   board.chip["class"]="SAMD"
   codeOut('#include "targetlibs/samd/include/due_sam3x.init.h"')
@@ -254,11 +260,16 @@ codeOut("");
 codeOut("#define RAM_TOTAL ("+str(board.chip['ram'])+"*1024)")
 codeOut("#define FLASH_TOTAL ("+str(board.chip['flash'])+"*1024)")
 codeOut("");
-if LINUX:
-  codeOut('#define RESIZABLE_JSVARS // Allocate variables in blocks using malloc')
-  #codeOut("#define JSVAR_CACHE_SIZE                "+str(200)+" // Number of JavaScript variables in RAM")
+
+if variables==0:
+  codeOut('#define RESIZABLE_JSVARS // Allocate variables in blocks using malloc - slow, and linux-only')
 else:
   codeOut("#define JSVAR_CACHE_SIZE                "+str(variables)+" // Number of JavaScript variables in RAM")
+
+if LINUX:  
+  codeOut("#define FLASH_START                     "+hex(0x10000000))
+  codeOut("#define FLASH_PAGE_SIZE                 "+str(flash_page_size))
+else:  
   codeOut("#define FLASH_AVAILABLE_FOR_CODE        "+str(int(flash_available_for_code)))
   if board.chip["class"]=="EFM32":
     codeOut("// FLASH_PAGE_SIZE defined in em_device.h");
@@ -276,19 +287,19 @@ else:
     codeOut("#define BOOTLOADER_SIZE                 "+str(common.get_bootloader_size(board)))
     codeOut("#define ESPRUINO_BINARY_ADDRESS         "+hex(common.get_espruino_binary_address(board)))
   codeOut("")
-  codeOut("#define FLASH_SAVED_CODE_START            "+str(flash_saved_code_start))
-  codeOut("#define FLASH_SAVED_CODE_LENGTH           "+str(int(flash_page_size*flash_saved_code_pages)))
-  if board.chip["family"]=="STM32L4":
-    codeOut("#define FLASH_MAGIC_LOCATION              (FLASH_SAVED_CODE_START + FLASH_SAVED_CODE_LENGTH - 8)")
-  else:
-    codeOut("#define FLASH_MAGIC_LOCATION              (FLASH_SAVED_CODE_START + FLASH_SAVED_CODE_LENGTH - 4)")
-  codeOut("#define FLASH_MAGIC 0xDEADBEEF")
+
+
+codeOut("#define FLASH_SAVED_CODE_START            "+str(flash_saved_code_start))
+codeOut("#define FLASH_SAVED_CODE_LENGTH           "+str(int(flash_page_size*flash_saved_code_pages)))
 codeOut("");
+
+codeOut("#define CLOCK_SPEED_MHZ                      "+str(board.chip["speed"]))
 codeOut("#define USART_COUNT                          "+str(board.chip["usart"]))
 codeOut("#define SPI_COUNT                            "+str(board.chip["spi"]))
 codeOut("#define I2C_COUNT                            "+str(board.chip["i2c"]))
 codeOut("#define ADC_COUNT                            "+str(board.chip["adc"]))
 codeOut("#define DAC_COUNT                            "+str(board.chip["dac"]))
+codeOut("#define EXTI_COUNT                           "+str(exti_count))
 codeOut("");
 codeOut("#define DEFAULT_CONSOLE_DEVICE              "+board.info["default_console"]);
 if "default_console_tx" in board.info:
@@ -312,8 +323,8 @@ else:
 if 'util_timer_tasks' in board.info:
   bufferSizeTimer = board.info['util_timer_tasks']
 
-codeOut("#define IOBUFFERMASK "+str(bufferSizeIO-1)+" // (max 255) amount of items in event buffer - events take ~9 bytes each")
-codeOut("#define TXBUFFERMASK "+str(bufferSizeTX-1)+" // (max 255)")
+codeOut("#define IOBUFFERMASK "+str(bufferSizeIO-1)+" // (max 255) amount of items in event buffer - events take 5 bytes each")
+codeOut("#define TXBUFFERMASK "+str(bufferSizeTX-1)+" // (max 255) amount of items in the transmit buffer - 2 bytes each")
 codeOut("#define UTILTIMERTASK_TASKS ("+str(bufferSizeTimer)+") // Must be power of 2 - and max 256")
 
 codeOut("");
@@ -347,7 +358,7 @@ if "LCD" in board.devices:
       codeOutDevicePin("LCD", "pin_reset", "LCD_RESET")
     if "pin_bl" in board.devices["LCD"]:
       codeOutDevicePin("LCD", "pin_bl", "LCD_BL")
-  if board.devices["LCD"]["controller"]=="ssd1306":
+  if board.devices["LCD"]["controller"]=="ssd1306" or board.devices["LCD"]["controller"]=="st7567":
     codeOutDevicePin("LCD", "pin_mosi", "LCD_SPI_MOSI")
     codeOutDevicePin("LCD", "pin_sck", "LCD_SPI_SCK")
     codeOutDevicePin("LCD", "pin_cs", "LCD_SPI_CS")

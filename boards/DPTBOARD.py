@@ -17,13 +17,14 @@ import pinutils;
 info = {
  'name' : "DPT-Board",
  'default_console' : "EV_USBSERIAL",
+ 'variables' :  0, # 0 = resizable variables, rather than fixed
  'binary_name' : 'espruino',
  'build' : {
    'libraries' : [
      'NET',
      'GRAPHICS',
      'FILESYSTEM',
-     'CRYPTO',
+     'CRYPTO','SHA256','SHA512',
      'TLS',
      'HASHLIB',
      'TELNET',
@@ -39,8 +40,8 @@ chip = {
   'part' : "DPTBOARD",
   'family' : "LINUX",
   'package' : "",
-  'ram' : -1,
-  'flash' : -1,
+  'ram' : 0,
+  'flash' : 256, # size of file used to fake flash memory (kb)
   'speed' : -1,
   'usart' : 1,
   'spi' : 1,

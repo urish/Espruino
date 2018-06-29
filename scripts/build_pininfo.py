@@ -111,8 +111,9 @@ for pin in pins:
       analog = "JSH_ANALOG"+adc+"|JSH_ANALOG_CH"+channel;
   functions = pin["jshFunctions"]
   while len(functions)<pinInfoFunctionCount: functions.append("0")
-
-  writesource("/* "+pin["name"].ljust(4)+" */ { JSH_PORT"+pin["port"]+", JSH_PIN0+"+pin["num"]+", "+analog+", { "+', '.join(functions)+" } },")
+  portextra = ""
+  if "NEGATED" in pin["functions"]: portextra="|JSH_PIN_NEGATED"
+  writesource("/* "+pin["name"].ljust(4)+" */ { JSH_PORT"+pin["port"]+portextra+", JSH_PIN0+"+pin["num"]+", "+analog+", { "+', '.join(functions)+" } },")
 writesource("};")
 
 portinfo = {}
@@ -122,7 +123,8 @@ for port in pinutils.ALLOWED_PORTS:
   o=-1
   for pin in pins:
     if pin["port"]==port:
-      if int(pin["num"])>=c: c = int(pin["num"])+1
+      usernum=int(pin["name"][2:])
+      if usernum>=c: c = usernum+1 # user-visible number
       if o<0: o=pins.index(pin)
   portinfo[port] = { 'count' : c, 'offset' : o };
 # Olimexino hack as things have been renamed

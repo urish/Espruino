@@ -17,7 +17,8 @@
 import pinutils;
 info = {
  'name' : "WIO TRACKER LTE",
- 'link' :  [ "http://www.st.com/web/catalog/tools/FM116/SC959/SS1532/LN1199/PF252419" ],
+ 'link' :  [ "http://www.espruino.com/WioLTE" ],
+ 'espruino_page_link' : 'WioLTE', 
  'default_console' : "EV_SERIAL2", # FIXME: This was S2 because of pin conflict. Not sure if it's really an issue?
  'variables' : 5450,
  'binary_name' : 'espruino_%v_Wio_LTE.bin',
@@ -31,6 +32,7 @@ info = {
    ],
    'makefile' : [
      'DEFINES+=-DUSE_USB_OTG_FS=1',
+     'DEFINES+=-DPIN_NAMES_DIRECT=1', # Package skips out some pins, so we can't assume each port starts from 0
      'DEFINES+=-DWIO_LTE',
      'USE_DFU=1',
      'STLIB=STM32F405xx',

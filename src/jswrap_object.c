@@ -129,7 +129,7 @@ JsVar *jswrap_object_toString(JsVar *parent, JsVar *arg0) {
       return jsvNewFromString(buf);
     }
   }
-  return jsvAsString(parent, false);
+  return jsvAsString(parent);
 }
 
 /*JSON{
@@ -209,7 +209,7 @@ void jswrap_object_keys_or_property_names_cb(
     JsvIsInternalChecker checkerFunction = jsvGetInternalFunctionCheckerFor(obj);
 
     JsvIterator it;
-    jsvIteratorNew(&it, obj);
+    jsvIteratorNew(&it, obj, JSIF_DEFINED_ARRAY_ElEMENTS);
     while (jsvIteratorHasElement(&it)) {
       JsVar *key = jsvIteratorGetKey(&it);
       if (!(checkerFunction && checkerFunction(key)) || (jsvIsStringEqual(key, JSPARSE_CONSTRUCTOR_VAR))) {
@@ -356,18 +356,27 @@ JsVar *jswrap_object_getOwnPropertyDescriptor(JsVar *parent, JsVar *name) {
     return 0;
   }
 
-  //jsvTrace(varName, 5);
-  JsVar *var = jsvSkipName(varName);
-
   bool isBuiltIn = jsvIsNewChild(varName);
   JsvIsInternalChecker checkerFunction = jsvGetInternalFunctionCheckerFor(parent);
 
-  jsvObjectSetChild(obj, "value", var);
+
   jsvObjectSetChildAndUnLock(obj, "writable", jsvNewFromBool(true));
   jsvObjectSetChildAndUnLock(obj, "enumerable", jsvNewFromBool(!checkerFunction || !checkerFunction(varName)));
   jsvObjectSetChildAndUnLock(obj, "configurable", jsvNewFromBool(!isBuiltIn));
+#ifndef SAVE_ON_FLASH
+  JsVar *getset = jsvGetValueOfName(varName);
+  if (jsvIsGetterOrSetter(getset)) {
+    jsvObjectSetChildAndUnLock(obj, "get", jsvObjectGetChild(getset,"get",0));
+    jsvObjectSetChildAndUnLock(obj, "set", jsvObjectGetChild(getset,"set",0));
+  } else {
+#endif
+    jsvObjectSetChildAndUnLock(obj, "value", jsvSkipName(varName));
+#ifndef SAVE_ON_FLASH
+  }
+  jsvUnLock(getset);
+#endif
 
-  jsvUnLock2(var, varName);
+  jsvUnLock(varName);
   return obj;
 }
 
@@ -434,8 +443,8 @@ Add a new property to the Object. 'Desc' is an object with the following fields:
 * `enumerable` (bool = false) - can this property be enumerated
 * `value` (anything) - the value of this property
 * `writable` (bool = false) - can the value be changed with the assignment operator?
-* `get` (function) - the getter function, or undefined if no getter
-* `set` (function) - the setter function, or undefined if no setter
+* `get` (function) - the getter function, or undefined if no getter (only supported on some platforms)
+* `set` (function) - the setter function, or undefined if no setter (only supported on some platforms)
 *
 **Note:** `configurable`, `enumerable`, `writable`, `get`, and `set` are not implemented and will be ignored.
  */
@@ -450,7 +459,25 @@ JsVar *jswrap_object_defineProperty(JsVar *parent, JsVar *propName, JsVar *desc)
   }
 
   JsVar *name = jsvAsArrayIndex(propName);
-  JsVar *value = jsvObjectGetChild(desc, "value", 0);
+  JsVar *value = 0;
+
+  JsVar *getter = jsvObjectGetChild(desc, "get", 0);
+  JsVar *setter = jsvObjectGetChild(desc, "set", 0);
+  if (getter || setter) {
+#ifdef SAVE_ON_FLASH
+    jsExceptionHere(JSET_ERROR, "get/set unsupported in this build");
+#else
+    // also see jsvAddGetterOrSetter(contents, varName, isGetter, method);
+    value = jsvNewWithFlags(JSV_GET_SET);
+    if (value) {
+      if (getter) jsvObjectSetChild(value, "get", getter);
+      if (setter) jsvObjectSetChild(value, "set", setter);
+    }
+#endif
+    jsvUnLock2(getter,setter);
+  }
+  if (!value) value = jsvObjectGetChild(desc, "value", 0);
+
   jsvObjectSetChildVar(parent, name, value);
   jsvUnLock2(name, value);
 
@@ -837,7 +864,8 @@ void jswrap_object_removeAllListeners_cstr(JsVar *parent, const char *event) {
     ["newFunc","JsVar","The new function to replace this function with"]
   ]
 }
-This replaces the function with the one in the argument - while keeping the old function's scope. This allows inner functions to be edited, and is used when edit() is called on an inner function.
+This replaces the function with the one in the argument - while keeping the old function's scope.
+This allows inner functions to be edited, and is used when edit() is called on an inner function.
  */
 void jswrap_function_replaceWith(JsVar *oldFunc, JsVar *newFunc) {
   if (!jsvIsFunction(newFunc)) {
@@ -859,8 +887,9 @@ void jswrap_function_replaceWith(JsVar *oldFunc, JsVar *newFunc) {
       oldFunc->flags = (oldFunc->flags&~JSV_VARTYPEMASK) |JSV_FUNCTION;
   }
 
-  // Grab scope - the one thing we want to keep
+  // Grab scope and prototype - the things we want to keep
   JsVar *scope = jsvFindChildFromString(oldFunc, JSPARSE_FUNCTION_SCOPE_NAME, false);
+  JsVar *prototype = jsvFindChildFromString(oldFunc, JSPARSE_PROTOTYPE_VAR, false);
   // so now remove all existing entries
   jsvRemoveAllChildren(oldFunc);
   // now re-add scope
@@ -872,7 +901,8 @@ void jswrap_function_replaceWith(JsVar *oldFunc, JsVar *newFunc) {
   while (jsvObjectIteratorHasValue(&it)) {
     JsVar *el = jsvObjectIteratorGetKey(&it);
     jsvObjectIteratorNext(&it);
-    if (!jsvIsStringEqual(el, JSPARSE_FUNCTION_SCOPE_NAME)) {
+    if (!jsvIsStringEqual(el, JSPARSE_FUNCTION_SCOPE_NAME) &&
+        !jsvIsStringEqual(el, JSPARSE_PROTOTYPE_VAR)) {
       JsVar *copy = jsvCopy(el, true);
       if (copy) {
         jsvAddName(oldFunc, copy);
@@ -882,7 +912,9 @@ void jswrap_function_replaceWith(JsVar *oldFunc, JsVar *newFunc) {
     jsvUnLock(el);
   }
   jsvObjectIteratorFree(&it);
-
+  // re-add prototype (it needs to come after other hidden vars)
+  if (prototype) jsvAddName(oldFunc, prototype);
+  jsvUnLock(prototype);
 }
 
 /*JSON{
@@ -929,7 +961,7 @@ JsVar *jswrap_function_apply_or_call(JsVar *parent, JsVar *thisArg, JsVar *argsA
     for (i=0;i<argC;i++) args[i] = 0;
     // TODO: Use jsvGetArrayItems?
     JsvIterator it;
-    jsvIteratorNew(&it, argsArray);
+    jsvIteratorNew(&it, argsArray, JSIF_EVERY_ARRAY_ELEMENT);
     while (jsvIteratorHasElement(&it)) {
       JsVarInt idx = jsvGetIntegerAndUnLock(jsvIteratorGetKey(&it));
       if (idx>=0 && idx<(int)argC) {

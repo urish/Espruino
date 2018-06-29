@@ -17,6 +17,7 @@ import pinutils;
 info = {
  'name' : "Arietta G25",
  'default_console' : "EV_USBSERIAL",
+ 'variables' :  0, # 0 = resizable variables, rather than fixed
  'binary_name' : 'espruino_%v_arietta',
  'build' : {
    'optimizeflags' : '-O3',
@@ -24,8 +25,8 @@ info = {
      'NET',
      'GRAPHICS',
      'FILESYSTEM',
-     'CRYPTO',
-     'TLS',
+     'CRYPTO','SHA256','SHA512',
+     'TLS',     
      'HASHLIB',
      'TELNET',
    ],
@@ -39,8 +40,8 @@ chip = {
   'part' : "ARMV5TEJL",
   'family' : "LINUX",
   'package' : "",
-  'ram' : -1,
-  'flash' : -1,
+  'ram' : 0,
+  'flash' : 256, # size of file used to fake flash memory (kb)
   'speed' : -1,
   'usart' : 0,
   'spi' : 1,

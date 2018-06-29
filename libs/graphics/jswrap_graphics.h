@@ -16,10 +16,12 @@
 
 #include "jsvar.h"
 #include "graphics.h"
+#include "bitmap_font_4x6.h"
 
 bool jswrap_graphics_idle();
 void jswrap_graphics_init();
 
+JsVar *jswrap_graphics_getInstance();
 // For creating graphics classes
 JsVar *jswrap_graphics_createArrayBuffer(int width, int height, int bpp,  JsVar *options);
 JsVar *jswrap_graphics_createCallback(int width, int height, int bpp, JsVar *callback);
@@ -40,6 +42,7 @@ void jswrap_graphics_setColorX(JsVar *parent, JsVar *r, JsVar *g, JsVar *b, bool
 JsVarInt jswrap_graphics_getColorX(JsVar *parent, bool isForeground);
 void jswrap_graphics_setFontSizeX(JsVar *parent, int size, bool checkValid);
 void jswrap_graphics_setFontCustom(JsVar *parent, JsVar *bitmap, int firstChar, JsVar *width, int height);
+void jswrap_graphics_setFontAlign(JsVar *parent, int x, int y, int r);
 void jswrap_graphics_drawString(JsVar *parent, JsVar *str, int x, int y);
 JsVarInt jswrap_graphics_stringWidth(JsVar *parent, JsVar *var);
 void jswrap_graphics_drawLine(JsVar *parent, int x1, int y1, int x2, int y2);
@@ -49,3 +52,4 @@ void jswrap_graphics_fillPoly(JsVar *parent, JsVar *poly);
 void jswrap_graphics_setRotation(JsVar *parent, int rotation, bool reflect);
 void jswrap_graphics_drawImage(JsVar *parent, JsVar *image, int xPos, int yPos);
 JsVar *jswrap_graphics_getModified(JsVar *parent, bool reset);
+void jswrap_graphics_scroll(JsVar *parent, int x, int y);

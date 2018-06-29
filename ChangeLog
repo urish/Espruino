@@ -1,4 +1,164 @@
-            nRF5x: Swap to UART fifo to avoid overrun errors at high baud rates
+            ESP32: update sdk to esp-idf 3.0.1, set Espruino build tools back to master branch
+	    Allow changeInterval with large (>32 bit) intervals (fix #1438)
+            changeInterval now changes the interval immediately when it's called inside the interval it is changing (fix #1440)
+            Fix parsing of try..catch when not executing (fix #1439)
+            Add extra ReferenceError checks, even if variable is not used
+            Allow Ctrl-C out of while...continue loop (fix #1441)
+            Fix bug if using an undefined member of an object for for..in (fix #1437)
+            Allow for..in to iterate over prototype chains down from Array and Object
+            Add for(var i of array) to iterate over elements
+            Added getter and setter support
+            Stop parsing blocks if not executing (fix #572)
+            Fix stack overflow if interpreting a file full of '{' (fix #1448)
+            Fix exception when performing record access on object from getter (fix #1454)
+            Switch to non-recursive StringExt copy (fix #1451)
+            Fix rounding errors in fillPoly -> improve vector font rendering
+            Fix issue that caused 'dump()' not to report variables/functions on Pixl.js
+            Add E.lookupNoCase to allow searching case-insensitively for Object keys
+            Fix HTTP Chunked transfers when the server uses lowercase headers (fix #1458)
+            Fix TypedArray.indexOf (fix #1468)
+            Allow require('Storage').write('a','',0,15) (zero length data) (fix #1465)
+            edit() now chooses the shortest way to describe the function
+            Fixed bug when RegExp.match/test called on non-strings
+            Added Global isFinite
+            Add missing ArrayBufferView.filter
+            Added Array.find and findIndex (also for ArrayBufferViews)
+            Fix unreliable ArrayBufferView.indexOf (#1468)
+            Added String.startsWith/endsWith/includes (#1302)
+            parseFloat(".s") now returns NaN
+            Fixed /\S+/.test(" ")
+            Added Storage.getFree() to return available space
+            Enable E.setTimeZone on boards with very little flash memory
+            Lower saved code area to 2k on micro:bit (from 3)
+            Remove RGB colour handling in setColor on devices with low flash
+
+     1v99 : Increase jslMatch error buffer size to handle "UNFINISHED TEMPLATE LITERAL" string (#1426)
+            nRF5x: Make FlashWrite cope with flash writes > 4k
+            Increase max size of native strings on platforms that support it - 16 bit to 32 bit (#1432)
+            Fix stack size detection on Linux (fix #1427)
+            Fix strncat/cpy bounding issues (fix #1425)
+            Promises now ignore a second resolve/reject (fix #1433)
+            Fix stack overflow if void void void... is repeated many times (fix #1434)
+            Fix font rendering issue caused by signed bit field handling by GCC on non-x86 platforms (fix #1436)
+            Added E.reboot() to allow hard reboots from software (fix #1429)
+            Added 'Graphics.getInstance()' for more platform independent graphics
+            Added VT100 'erase in Display' to Terminal
+            In REPL, use x.toString() for objects if we know their name and it is available
+            Pixl.js add BLE aerial test to self-test, now also start immediately on BTN4 at boot
+
+     1v98 : Allow Crypto SHA1 without SHA256/512 (for ESP8266 where flash is scarce)
+            Add better docs for the form of Wifi callback functions
+            Modify ESP8266/ESP32 callbacks to match the node.js style used elsewhere
+            nRF52: fix pin.toggle() on software-negated pins
+            Pixl.js: Reorder pins so 0..13 are also D0..13 for better Arduino compatibility
+            Fix dump() when used with code written using E.setBootCode(..), (fix #1398)
+            Allow parseInt/parseFloat to be used on very large strings if the number doesn't extend right to the end (fix #1397)
+            nRF5x: Fix memory leak on NRF.connect
+            Fix memory leak if an exception is thrown within a rejected promise
+            ESP8266: rewrite wifi.save and restore to use the storage lib (imp #1380)
+	    ESP8266: Add missing option ssid_hidden for Wifi.startAP() (imp #1358)
+            Fixed double-connect issue for TCP sockets
+            Pixl.js: Ensure Pixl.menu changes to bitmap fonts
+            Pixl.js: tweaked bias/contrast to improve display quality
+            ESP32: update esp-idf to v3.0. BLE support - thanks to @jumjum. Erase flash before flashing. vars now 2500
+            ESP8266: rearange rf_cal_sector (fix #1294)
+            ESP8266: Wifi.scan() now return authmode as text 
+            ESP32: Fix accidental initialisation of UART3 when switching to Telnet (fix #1362)
+            nRF52: Added `NRF.setAddress` to allow the MAC address to be changed
+            Added Graphics.setFontAlign for font alignment and rotation
+            Make software I2C bitrate and waveform more accurate
+            Move default I2C bitrate to 100kbit/sec
+            Linux: don't create a espruino.flash file if we're not writing to flash
+            Add height check for Graphics.createArrayBuffer(...vertical_byte:true) (fix #1421)
+            Add sanity check for debug trace print statement (fix #1420)
+            Fix handling of exceptions in switch statements (fix #1352)
+            Fix 'return when not in function' regression when returning inside a catch block (fix #1422)
+            Don't load saved firmware images from different firmware versions - saved JS code still loaded (fix #1174)
+            Remove Graphics.setFontAlign and Graphics.getModified on devices with low flash memory
+
+     1v97 : nRF52: fix NRF.on('connect',...) issue
+            STM32: Fix setDeviceClockCmd error for USB.setConsole()
+            nRF5x: Fix getPinMode, which fixes SW I2C after save()
+            Thingy52: Don't report contents of 'Thingy' in 'dump()'
+            Thingy52: Allow multiple sounds to play at once
+            nRF5x: Ensure Waveform triggers a finished event
+            Thingy52: Enable simple bootloader, add travis build for DFU
+            Add Serial.inject to allow data to be added as if it was received from that device
+            Fix UDP handling so that it copes with packets not all being received in one go
+            STM32L496: increase variables - use full 320kB of RAM as it is contiguous
+            Add a maximum time for setTimeout/setInterval (100 years)
+            Fix Storage.write when writing partial file of the same length and initial contents
+            Fix corrupted timer channels returned by Pin.getInfo
+            Add command history to debugger
+            Remove process.env.EXPORTS (EXPTR does the same but takes less space)
+            Thingy52: Add 9 axis MPU support
+            Errors now store message in 'message', not 'msg' (fix #1366)
+            Ensure 'in' operator checks the prototype chain (fix #1365)
+            Promise.resolve now handles promises/thenables as arguments (fix #1363)
+            try..catch now creates exception in its own scope (fix #1367)
+            Thingy52,Pixl.js: add default NFC URL of the Espruino IDE 
+            Add ArrayBuffer.byteLength property (fix #1374)
+            setWatch(..., {edge:"rising",debounce:25}) is now default for built-in buttons
+            Pixl.js: add Pixl.menu function for easy menus, build in graphical_menu.js
+            Fix regression in MDBT42Q advertised name
+            nRF52: Add E.getBattery as a more global battery percentage function, deprecate `Puck.getBatteryPercentage`
+            Fix '.buffer' regression in 'JSON.stringify(new Uint8Array([1,2,3,4]).buffer)'
+            Allow `typeof 123 .testing` without an exception (fix #1351)
+            Add crypto.AES to Puck.js and other nRF52 Espruino devices
+
+     1v96 : ESP8266: no callback if SSID is not available (fix #1297)
+            ESP8266: esp8266 wifi getStatus doesn't show savedMode (fix #752)
+            ESP8266: cleanup defines WIFI_DBG and NET_DBG for RELEASE
+            ESP8266: switch to single ld file eagle.app.v6.new.2048.ld for ESP8266_4MB board
+            Allow JS modules to be built-in by adding files to JSMODULESOURCES
+            Fix slow/hacky handling of 7 bit serial data for STM32
+            Add more stack checks so invalid code `typeof typeof typeof x100` can't break stack (fix #1310)
+            nRF5x: Fix PWM output via Waveform class
+            Fix free stack checking on ARM
+            nRF52: Make slightly more space available for stack
+            nRF5x: Move to SDK 12.3
+            Stop stack traces from being gathered in functions for Ctrl-C (fix #1313)
+            nRF5x: Fix crash if I2C is used before being initialised (fix #1301)
+            Internal printf can now pad with spaces
+            Add `E.dumpFreeList` in non-release builds to help with debugging
+            Fix mild memory leak in jsvMakeIntoVariableName that caused GC to run more often than normal
+            E.toString now tries harder to allocate a Flat String, and works with no-alloc for Uint8Array/FlatStrings
+            WIO_LTE fix SD card initialisation
+            Improve SD card reliability on all boards by trying to initialise multiple times before failing
+            Remove forced inlining in variable inspection functions (reduces flash usage by ~10k)
+            Remove un-needed DNS lookup for localhost
+            Add WIZnet UDP support
+            Tidying up build to avoid making un-needed bin, hex or lst files
+            Simplify flash save (and help debugging) by using the 'fake flash' implementation on Linux builds
+            Added Graphics.scroll command to scroll graphics contents
+            Added 'Terminal' class with built-in VT100 terminal
+            Tweak Espruino logo to be exactly 32 chars wide
+            Improved code for returning console device to the most useful place
+            Fix pinToString for devices with port A but no port B
+            Speed improvements for ArrayBuffer Graphics
+            Tidied up bootloader - devices with one LED now flash LED when button pressed
+            Simplify data returned by process.env
+            Add process.env.MODULES - to contain a list of the libraries provided in the firmware by require
+            Include WiFi and AT libraries inside Espruino WiFi builds
+            Add 'E.asm' placeholder to detect E.asm calls that haven't been replaced by the IDE
+            Add process.env.EXPTR to link to table of functions - will work better for compiled code over BLE
+            Added SAVE_ON_FLASH_EXTREME for HYSTM32_28, where we're now cutting out some Math.X functionality to keep builds going 
+            Added `jshFlashGetMemMapAddress` to allow remapping of addresses for ESP8266/ESP32 without loads of code duplication
+            Remap peek8/16/32 addresses on ESP32/ESP8266 so it can be used on flash memory
+            Swapped save/load/E.setBootCode to use the flash library
+            Allow STM32LL port to write 32 bits to flash at a time to bring it in line with other ports
+            Allow flash writes *from* unaligned addresses on nRF52 and ESP8266 (previously this crashed the ESP8266)
+            Update process.ENV.EXPORTS to bring it in line with what the compiler uses
+            Now set 'this' correctly for Arrow Functions
+            Add ES6 classes and 'super'
+            nRF5x: Move all bluetooth events to event queue (removing MEMORY_BUSY issues)
+            Fix potential issue where EV_TYPE_MASK enum could be set incorrectly  
+            setWatch's edge argument can also be an integer now
+            Add 'data' option to setWatch to allow clocked data to be decoded easily
+            nRF52: Increase flash available for stored code from 12kB for 40kB
+            Now store/display appreviated commit in process.env, remove build date
+  
+     1v95 : nRF5x: Swap to UART fifo to avoid overrun errors at high baud rates
             Ensure Exceptions/errors are reported on a blank line
             Internal: Added initialiser argument to jsvNewStringOfLength
             Internal: Added jsvObjectSetChildVar/jsvObjectSetChildVar/jsvObjectSetChildVar
@@ -16,14 +176,37 @@
             ESP8266: move code save section to fist partition for memory mapping for ESP8266_4MB (fix #1240)
             ESP8266: Add GPIO16 as D16 without watch (#1206) but soft PWM/I2C/SPI/etc 
             ESP8266: Remove osprintf for RELEASE=1 
-            Networkjs now forwards `socketType` - laying groundwork for UDP over AT command (#1232)
+            Internal: Networkjs now forwards `socketType` - laying groundwork for UDP over AT command (#1232)
             Added simple RegExp implemention (partial fix #256)
             Speed up JSON.stringify for Arrays, and output non-numeric array elements in REPL (fix #64)
-            Bump nRF52-based boards variable count from 2000 to 2500 (fix #1215)
+            nRF5x: Bump nRF52-based boards variable count from 2000 to 2500 (fix #1215)
             Ensure Ctrl-C doesn't redraw the input line if it's already empty
             Added String.replace(regex, function) (fix #1256)
             With E.setFlags({pretokenise:1}), ensure stack traces are not tokenised (fix #1258)
             Allow digitalWrite/Read to take an object as an argument (calling .write and .read on it)
+            Add `E.getAddressOf` to allow embedded targets to get memory addresses for DMA/etc
+            nRF5x: Fix issue where doing a soft reset in the middle of some BLE ops could cause an assert in debug builds
+            nRF5x: Manufacturer Data is now decoded in advertising packets
+            Fix memory leak when allocating DataViews
+            nRF5x: Fix memory leak on BLE notifications
+            Ensure net/http .listen return the server instance (fix #1276)
+            nRF5x: Allow Manufacturer Data to be specified with setAdvertising
+            Internal: Fix memory leak in jsvArrayPushAll
+            nRF5x: jsvArrayPushAll memory leak fixes NRF.findDevices memory leak when services present
+            Internal: jsvNewIterator now has an option to iterate over sparse arrays as if they weren't sparse
+            Fixed some built-in functions that misbehaved when given sparse arrays
+            Puck.js: Allow flash memory protection to be overwridden with E.setFlags
+            Fix lexing of '/*/' as a complete block comment
+            nRF5x: Add support for negating pins in software (eg. buttons/LEDs)
+            Add `E.setFlags({unsyncFiles:1}` which doesn't sync the file to the SD card after each write - it's *much* faster
+            Filesystem API now uses flat strings (avoiding the 512 byte copy for each call)
+            Increase default internal SD card bitrate to 4MHz (from 100k)
+            nRF5x: Handle promise completions and advertising using IO queue, to avoid MEMORY_BUSY messages (#1277)
+            Allow E.HSBtoRGB to wrap 'hue' value, and allow it to return an array of [r,g,b] (fix #1283)
+            Remove spikes when changing pin state (fix #1274)
+            Changes to reduce code duplication in jswrapper.c
+            Fix `E.setBootCode` when no argument is supplied
+            Add WIZnet W5500 support to Espruino WiFi build
 
      1v94 : Allow Espruino boards to reset straight out of the DFU Bootloader             
             Improvements in handling errors in code running in IRQs

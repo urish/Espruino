@@ -298,6 +298,9 @@ void jshFlashRead(void * buf, uint32_t addr, uint32_t len) {
 	memcpy(buf, (void*)addr, len);
 }
 
+// Just pass data through, since we can access flash at the same address we wrote it
+size_t jshFlashGetMemMapAddress(size_t ptr) { return ptr; }
+
 JsSysTime jshGetSystemTime() {
 	return (JsSysTime) ((unsigned long long)uppercounter * 0xFFFFFFFF) + GetTickCount();
 }
@@ -442,4 +445,9 @@ void jshUtilTimerDisable() {
 
 unsigned int jshGetRandomNumber() {
 	return 1234;
+}
+
+/// Perform a proper hard-reboot of the device
+void jshReboot() {
+  jsExceptionHere(JSET_ERROR, "Not implemented");
 }

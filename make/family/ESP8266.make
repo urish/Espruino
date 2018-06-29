@@ -58,7 +58,6 @@ FLASH_BAUD ?= 115200 # The flash baud rate
 # move os_printf strings into flash to save RAM space
 DEFINES += -DUSE_OPTIMIZE_PRINTF
 DEFINES += -D__ETS__ -DICACHE_FLASH -DXTENSA -DUSE_US_TIMER
-ESP8266=1
 LIBS += -lc -lgcc -lhal -lphy -lpp -lnet80211 -llwip_536 -lwpa -lmain -lpwm -lcrypto
 CFLAGS+= -fno-builtin \
 -Wno-maybe-uninitialized -Wno-old-style-declaration -Wno-conversion -Wno-unused-variable \
@@ -97,9 +96,12 @@ SOURCES += targets/esp8266/uart.c \
 	targets/esp8266/jshardware.c \
 	targets/esp8266/i2c_master.c \
 	targets/esp8266/esp8266_board_utils.c \
-	targets/esp8266/gdbstub.c \
-	targets/esp8266/gdbstub-entry.S \
 	libs/network/esp8266/network_esp8266.c
+
+ifdef DEBUG
+SOURCES += 	targets/esp8266/gdbstub.c \
+	targets/esp8266/gdbstub-entry.S 
+endif
 
 # The tool used for building the firmware and flashing
 ESPTOOL    ?= $(ESP8266_SDK_ROOT)/esptool/esptool.py

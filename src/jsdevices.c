@@ -28,6 +28,7 @@
 
 // ----------------------------------------------------------------------------
 //                                                              WATCH CALLBACKS
+#define JSEVENTCALLBACK_PIN_MASK 0xFFFFFF00
 JshEventCallbackCallback jshEventCallbacks[EV_EXTI_MAX+1-EV_EXTI0];
 
 // ----------------------------------------------------------------------------
@@ -75,6 +76,7 @@ volatile unsigned char ioHead=0, ioTail=0;
 /** Initialize any device-specific structures, like flow control states.
  * Called from jshInit */
 void jshInitDevices() {
+  DEVICE_SANITY_CHECK();
   jshResetDevices();
 }
 
@@ -161,7 +163,14 @@ void jshTransmit(
   if (device == EV_TELNET) {
     // gross hack to avoid deadlocking on the network here
     extern void telnetSendChar(char c);
-    telnetSendChar(data);
+    telnetSendChar((char)data);
+    return;
+  }
+#endif
+#ifdef USE_TERMINAL
+  if (device==EV_TERMINAL) {
+    extern void terminalSendChar(char c);
+    terminalSendChar((char)data);
     return;
   }
 #endif
@@ -224,6 +233,18 @@ void jshTransmit(
   txHead = txHeadNext;
 
   jshUSARTKick(device); // set up interrupts if required
+}
+
+static void jshTransmitPrintfCallback(const char *str, void *user_data) {
+  IOEventFlags device = (IOEventFlags)user_data;
+  while (*str) jshTransmit(device, (unsigned char)*(str++));
+}
+
+void jshTransmitPrintf(IOEventFlags device, const char *fmt, ...) {
+  va_list argp;
+  va_start(argp, fmt);
+  vcbprintf(jshTransmitPrintfCallback,(void *)device, fmt, argp);
+  va_end(argp);
 }
 
 // Return the device at the top of the transmit queue (or EV_NONE)
@@ -329,39 +350,8 @@ void CALLED_FROM_INTERRUPT jshIOEventOverflowed() {
   jsErrorFlags |= JSERR_RX_FIFO_FULL;
 }
 
-
-/**
- * Send a character to the specified device.
- */
-void jshPushIOCharEvent(
-    IOEventFlags channel, // !< The device to target for output.
-    char charData         // !< The character to send to the device.
-  ) {
-  // Check for a CTRL+C
-  if (charData==3 && channel==jsiGetConsoleDevice()) {
-    jsiCtrlC(); // Ctrl-C - force interrupt of execution
-    return;
-  }
-  // Check for existing buffer (we must have at least 2 in the queue to avoid dropping chars though!)
-#ifndef LINUX // no need for this on linux, and also potentially dodgy when multi-threading
-  unsigned char lastHead = (unsigned char)((ioHead+IOBUFFERMASK) & IOBUFFERMASK); // one behind head
-  if (ioHead!=ioTail && lastHead!=ioTail) {
-    // we can do this because we only read in main loop, and we're in an interrupt here
-    if (IOEVENTFLAGS_GETTYPE(ioBuffer[lastHead].flags) == channel) {
-      unsigned char c = (unsigned char)IOEVENTFLAGS_GETCHARS(ioBuffer[lastHead].flags);
-      if (c < IOEVENT_MAXCHARS) {
-        // last event was for this event type, and it has chars left
-        ioBuffer[lastHead].data.chars[c] = charData;
-        IOEVENTFLAGS_SETCHARS(ioBuffer[lastHead].flags, c+1);
-        return; // char added, job done
-      }
-    }
-  }
-#endif
-  // Set flow control (as we're going to use more data)
-  if (DEVICE_IS_USART(channel) && jshGetEventsUsed() > IOBUFFER_XOFF)
-    jshSetFlowControlXON(channel, false);
-
+/// Push an IO event into the ioBuffer (designed to be called from IRQ)
+void CALLED_FROM_INTERRUPT jshPushEvent(IOEvent *evt) {
   /* Make new buffer
    *
    * We're disabling IRQs for this bit because it's actually quite likely for
@@ -374,19 +364,73 @@ void jshPushIOCharEvent(
     jshIOEventOverflowed();
     return; // queue full - dump this event!
   }
-  unsigned char oldHead = ioHead;
+  ioBuffer[ioHead] = *evt;
   ioHead = nextHead;
-  ioBuffer[oldHead].flags = channel;
-  // once channel is set we're safe - another IRQ won't touch this
   jshInterruptOn();
-  IOEVENTFLAGS_SETCHARS(ioBuffer[oldHead].flags, 1);
-  ioBuffer[oldHead].data.chars[0] = charData;
 }
 
-/**
- * Signal an IO watch event as having happened.
- */
-// on the esp8266 we need this to be loaded into static RAM because it can run at interrupt time
+/// Attempt to push characters onto an existing event
+static bool jshPushIOCharEventAppend(IOEventFlags channel, char charData) {
+  unsigned char lastHead = (unsigned char)((ioHead+IOBUFFERMASK) & IOBUFFERMASK); // one behind head
+  if (ioHead!=ioTail && lastHead!=ioTail) {
+    // we can do this because we only read in main loop, and we're in an interrupt here
+    if (IOEVENTFLAGS_GETTYPE(ioBuffer[lastHead].flags) == channel) {
+      unsigned char c = (unsigned char)IOEVENTFLAGS_GETCHARS(ioBuffer[lastHead].flags);
+      if (c < IOEVENT_MAXCHARS) {
+        // last event was for this event type, and it has chars left
+        ioBuffer[lastHead].data.chars[c] = charData;
+        IOEVENTFLAGS_SETCHARS(ioBuffer[lastHead].flags, c+1);
+        return true; // char added, job done
+      }
+    }
+  }
+  return false;
+}
+
+/// Try and handle events in the IRQ itself
+static bool jshPushIOCharEventHandler(IOEventFlags channel, char charData) {
+  // Check for a CTRL+C
+  if (charData==3 && channel==jsiGetConsoleDevice()) {
+    jsiCtrlC(); // Ctrl-C - force interrupt of execution
+    return true;
+  }
+  return false;
+}
+
+
+// Set flow control (as we're going to use more data)
+static void jshPushIOCharEventFlowControl(IOEventFlags channel) {
+  if (DEVICE_IS_USART(channel) && jshGetEventsUsed() > IOBUFFER_XOFF)
+    jshSetFlowControlXON(channel, false);
+}
+
+/// Send a character to the specified device.
+void jshPushIOCharEvent(
+    IOEventFlags channel, // !< The device to target for output.
+    char charData         // !< The character to send to the device.
+  ) {
+  // See if we need to handle this in the IRQ
+  if (jshPushIOCharEventHandler(channel, charData)) return;
+  // Check if we can push into existing buffer (we must have at least 2 in the queue to avoid dropping chars though!)
+  if (jshPushIOCharEventAppend(channel, charData)) return;
+
+  IOEvent evt;
+  evt.flags = channel;
+  IOEVENTFLAGS_SETCHARS(evt.flags, 1);
+  evt.data.chars[0] = charData;
+  jshPushEvent(&evt);
+  // Set flow control (as we're going to use more data)
+  jshPushIOCharEventFlowControl(channel);
+}
+
+void jshPushIOCharEvents(IOEventFlags channel, char *data, unsigned int count) {
+  // TODO: optimise me!
+  unsigned int i;
+  for (i=0;i<count;i++) jshPushIOCharEvent(channel, data[i]);
+}
+
+/* Signal an IO watch event as having happened.
+On the esp8266 we need this to be loaded into static RAM because it can run at interrupt time */
 void CALLED_FROM_INTERRUPT jshPushIOWatchEvent(
     IOEventFlags channel //!< The channel on which the IO watch event has happened.
   ) {
@@ -394,39 +438,43 @@ void CALLED_FROM_INTERRUPT jshPushIOWatchEvent(
 
   bool state = jshGetWatchedPinState(channel);
 
-  // If there is a callback associated with this GPIO event then invoke
-  // it and we are done.
-  if (jshEventCallbacks[channel-EV_EXTI0]) {
-    jshEventCallbacks[channel-EV_EXTI0](state, channel);
-    return;
+  // If there is a callback or pin associated with this GPIO event
+  // the handle it
+  int evt = channel-EV_EXTI0;
+  if (jshEventCallbacks[evt]) {
+    if (((uint32_t)jshEventCallbacks[evt] & JSEVENTCALLBACK_PIN_MASK)==JSEVENTCALLBACK_PIN_MASK) {
+      // It's a pin, read the value and store it in the event channel
+      Pin pin = (Pin)((uint32_t)jshEventCallbacks[evt] &~ JSEVENTCALLBACK_PIN_MASK);
+      if (jshPinGetValue(pin)) channel |= EV_EXTI_DATA_PIN_HIGH;
+    } else {
+      // It's a callback - invoke and return
+      jshEventCallbacks[evt](state, channel);
+      return;
+    }
   }
+
+  if (state) channel |= EV_EXTI_IS_HIGH;
 
   JsSysTime time = jshGetSystemTime();
 
 #ifdef USE_TRIGGER
   // TODO: move to using jshSetEventCallback
-  if (trigHandleEXTI(channel | (state?EV_EXTI_IS_HIGH:0), time))
+  if (trigHandleEXTI(channel, time))
     return;
 #endif
   // Otherwise add this event
-  jshPushIOEvent(channel | (state?EV_EXTI_IS_HIGH:0), time);
+  jshPushIOEvent(channel, time);
 }
 
-/**
- * Add this IO event to the IO event queue.
- */
+/// Add this IO event to the IO event queue.
 void CALLED_FROM_INTERRUPT jshPushIOEvent(
     IOEventFlags channel, //!< The event to add to the queue.
     JsSysTime time        //!< The time that the event is thought to have happened.
   ) {
-  unsigned char nextHead = (unsigned char)((ioHead+1) & IOBUFFERMASK);
-  if (ioTail == nextHead) {
-    jshIOEventOverflowed();
-    return; // queue full - dump this event!
-  }
-  ioBuffer[ioHead].flags = channel;
-  ioBuffer[ioHead].data.time = (unsigned int)time;
-  ioHead = nextHead;
+  IOEvent evt;
+  evt.flags = channel;
+  evt.data.time = (unsigned int)time;
+  jshPushEvent(&evt);
 }
 
 // returns true on success
@@ -517,9 +565,16 @@ const char *jshGetDeviceString(
 #ifdef USE_TELNET
   case EV_TELNET: return "Telnet";
 #endif
+#ifdef USE_TERMINAL
+  case EV_TERMINAL: return "Terminal";
+#endif
   case EV_SERIAL1: return "Serial1";
+#if USART_COUNT>=2
   case EV_SERIAL2: return "Serial2";
+#endif
+#if USART_COUNT>=3
   case EV_SERIAL3: return "Serial3";
+#endif
 #if USART_COUNT>=4
   case EV_SERIAL4: return "Serial4";
 #endif
@@ -572,49 +627,34 @@ IOEventFlags jshFromDeviceString(
      if (strcmp(&device[1], "luetooth")==0) return EV_BLUETOOTH;
   }
 #endif
-#ifdef USE_TELNET
   if (device[0]=='T') {
+#ifdef USE_TELNET
      if (strcmp(&device[1], "elnet")==0) return EV_TELNET;
-  }
 #endif
+#ifdef USE_TERMINAL
+     if (strcmp(&device[1], "erminal")==0) return EV_TERMINAL;
+#endif
+  }
   else if (device[0]=='S') {
-    if (device[1]=='e' && device[2]=='r' && device[3]=='i' && device[4]=='a' && device[5]=='l' && device[6]!=0 && device[7]==0) {
-      if (device[6]=='1') return EV_SERIAL1;
-      if (device[6]=='2') return EV_SERIAL2;
-      if (device[6]=='3') return EV_SERIAL3;
-#if USART_COUNT>=4
-      if (device[6]=='4') return EV_SERIAL4;
+#if USART_COUNT>0
+  if (device[1]=='e' && device[2]=='r' && device[3]=='i' && device[4]=='a' && device[5]=='l' &&
+      device[6]>='1' && (device[6]-'1')<USART_COUNT &&
+      device[7]==0)
+    return EV_SERIAL1+device[6]-'1';
 #endif
-#if USART_COUNT>=5
-      if (device[6]=='5') return EV_SERIAL5;
-#endif
-#if USART_COUNT>=6
-      if (device[6]=='6') return EV_SERIAL6;
-#endif
-    }
-    if (device[1]=='P' && device[2]=='I' && device[3]!=0 && device[4]==0) {
-#if SPI_COUNT>=1
-      if (device[3]=='1') return EV_SPI1;
-#endif
-#if SPI_COUNT>=2
-      if (device[3]=='2') return EV_SPI2;
-#endif
-#if SPI_COUNT>=3
-      if (device[3]=='3') return EV_SPI3;
-#endif
-    }
-  }
-  else if (device[0]=='I' && device[1]=='2' && device[2]=='C' && device[3]!=0 && device[4]==0) {
-#if I2C_COUNT>=1
-    if (device[3]=='1') return EV_I2C1;
-#endif
-#if I2C_COUNT>=2
-    if (device[3]=='2') return EV_I2C2;
-#endif
-#if I2C_COUNT>=3
-    if (device[3]=='3') return EV_I2C3;
+#if SPI_COUNT>0
+  if (device[1]=='P' && device[2]=='I' &&
+      device[3]>='1' && (device[3]-'1')<SPI_COUNT &&
+      device[4]==0)
+    return EV_SPI1+device[3]-'1';
 #endif
   }
+#if I2C_COUNT>0
+  else if (device[0]=='I' && device[1]=='2' && device[2]=='C' &&
+           device[3]>='1' && (device[3]-'1')<I2C_COUNT &&
+           device[4]==0)
+    return EV_I2C1+device[3]-'1';
+#endif
   return EV_NONE;
 }
 
@@ -671,14 +711,25 @@ void jshSetFlowControlEnabled(IOEventFlags device, bool software, Pin pinCTS) {
   }
 }
 
-/// Set a callback function to be called when an event occurs
-void jshSetEventCallback(
-    IOEventFlags channel,             //!< The event that fires the callback.
-    JshEventCallbackCallback callback //!< The callback to be invoked.
-  ) {
-  // Save the callback function for this event channel.
+/// Set a callback function to be called when an event occurs. Shares same storage as jshSetEventDataPin
+void jshSetEventCallback(IOEventFlags channel, JshEventCallbackCallback callback) {
   assert(channel>=EV_EXTI0 && channel<=EV_EXTI_MAX);
   jshEventCallbacks[channel-EV_EXTI0] = callback;
+}
+
+/// Set a data pin to be read when an event occurs. Shares same storage as jshSetEventCallback
+void jshSetEventDataPin(IOEventFlags channel, Pin pin) {
+  assert(channel>=EV_EXTI0 && channel<=EV_EXTI_MAX);
+  jshEventCallbacks[channel-EV_EXTI0] = (void*)(uint32_t)(JSEVENTCALLBACK_PIN_MASK | pin);
+}
+
+/// Get a data pin to be read when an event occurs
+Pin jshGetEventDataPin(IOEventFlags channel) {
+  assert(channel>=EV_EXTI0 && channel<=EV_EXTI_MAX);
+  int evt = channel-EV_EXTI0;
+  if (((uint32_t)jshEventCallbacks[evt] & JSEVENTCALLBACK_PIN_MASK) == JSEVENTCALLBACK_PIN_MASK)
+    return (Pin)((uint32_t)jshEventCallbacks[evt] & ~JSEVENTCALLBACK_PIN_MASK);
+  return PIN_UNDEFINED;
 }
 
 void jshSetErrorHandlingEnabled(IOEventFlags device, bool errorHandling) {

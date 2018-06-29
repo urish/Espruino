@@ -16,16 +16,17 @@
 import pinutils;
 
 info = {
- 'name' : "nRF52 Preview Development Kit",
- 'link' :  [ "https://www.nordicsemi.com/Products/Bluetooth-Smart-Bluetooth-low-energy/nRF52832" ],
+ 'name' : "nRF52 Development Kit",
+ 'link' :  [ "https://www.nordicsemi.com/eng/Products/Bluetooth-low-energy/nRF52-DK" ],
+ 'espruino_page_link' : 'nRF52832DK',
   # This is the PCA10036
  'default_console' : "EV_SERIAL1",
  'default_console_tx' : "D6",
  'default_console_rx' : "D8",
  'default_console_baudrate' : "9600",
- 'variables' : 2500, # How many variables are allocated for Espruino to use. RAM will be overflowed if this number is too high and code won't compile.
+ 'variables' : 2250, # How many variables are allocated for Espruino to use. RAM will be overflowed if this number is too high and code won't compile.
 # 'bootloader' : 1,
- 'binary_name' : 'espruino_%v_nrf52832.bin',
+ 'binary_name' : 'espruino_%v_nrf52832.hex',
  'build' : {
    'optimizeflags' : '-Os',
    'libraries' : [
@@ -36,6 +37,7 @@ info = {
      'NEOPIXEL'
    ],
    'makefile' : [
+     'DEFINES+=-DCONFIG_GPIO_AS_PINRESET', # Allow the reset pin to work
      'DEFINES += -DBOARD_PCA10040 -DPCA10040'
    ]
  }
@@ -55,22 +57,22 @@ chip = {
   'adc' : 1,
   'dac' : 0,
   'saved_code' : {
-    'address' : ((118 - 3) * 4096), # Bootloader takes pages 120-127, FS takes 118-119
+    'address' : ((118 - 10) * 4096), # Bootloader takes pages 120-127, FS takes 118-119
     'page_size' : 4096,
-    'pages' : 3,
-    'flash_available' : 512 - ((31 + 8 + 1 + 3)*4) # Softdevice uses 31 pages of flash, bootloader 8, FS 1, code 3. Each page is 4 kb.
+    'pages' : 10,
+    'flash_available' : 512 - ((31 + 8 + 2 + 10)*4) # Softdevice uses 31 pages of flash, bootloader 8, FS 2, code 10. Each page is 4 kb.
   },
 };
 
 devices = {
-  'LED1' : { 'pin' : 'D17', 'inverted' : True },
-  'LED2' : { 'pin' : 'D18', 'inverted' : True },
-  'LED3' : { 'pin' : 'D19', 'inverted' : True },
-  'LED4' : { 'pin' : 'D20', 'inverted' : True },
-  'BTN1' : { 'pin' : 'D13', 'inverted' : True, 'pinstate' : 'IN_PULLUP' },
-  'BTN2' : { 'pin' : 'D14', 'inverted' : True, 'pinstate' : 'IN_PULLUP' },
-  'BTN3' : { 'pin' : 'D15', 'inverted' : True, 'pinstate' : 'IN_PULLUP' },
-  'BTN4' : { 'pin' : 'D16', 'inverted' : True, 'pinstate' : 'IN_PULLUP' },
+  'BTN1' : { 'pin' : 'D13', 'pinstate' : 'IN_PULLDOWN' }, # Pin negated in software
+  'BTN2' : { 'pin' : 'D14', 'pinstate' : 'IN_PULLDOWN' }, # Pin negated in software
+  'BTN3' : { 'pin' : 'D15', 'pinstate' : 'IN_PULLDOWN' }, # Pin negated in software
+  'BTN4' : { 'pin' : 'D16', 'pinstate' : 'IN_PULLDOWN' }, # Pin negated in software
+  'LED1' : { 'pin' : 'D17' }, # Pin negated in software
+  'LED2' : { 'pin' : 'D18' }, # Pin negated in software
+  'LED3' : { 'pin' : 'D19' }, # Pin negated in software
+  'LED4' : { 'pin' : 'D20' }, # Pin negated in software
   'RX_PIN_NUMBER' : { 'pin' : 'D8'},
   'TX_PIN_NUMBER' : { 'pin' : 'D6'},
   'CTS_PIN_NUMBER' : { 'pin' : 'D7'},
@@ -80,10 +82,39 @@ devices = {
 
 # left-right, or top-bottom order
 board = {
-  'left' : [ 'VDD', 'VDD', 'RESET', 'VDD','5V','GND','GND','PD3','PD4','PD28','PD29','PD30','PD31'],
-  'right' : [ 'PD27', 'PD26', 'PD2', 'GND', 'PD25','PD24','PD23', 'PD22','PD20','PD19','PD18','PD17','PD16','PD15','PD14','PD13','PD12','PD11','PD10','PD9','PD8','PD7','PD6','PD5','PD21','PD1','PD0'],
+  'left' : [ 'VDD', 'VDD', 'RESET', 'VDD','5V','GND','GND','','','D3','D4','D28','D29','D30','D31'],
+  'right' : [
+     'D27', 'D26', 'D2', 'GND', 'D25','D24','D23', 'D22','D20','D19','',
+     'D18','D17','D16','D15','D14','D13','D12','D11','',
+     'D10','D9','D8','D7','D6','D5','D21','D1','D0'],
+  '_notes' : {
+    'D6' : "Serial console RX",
+    'D8' : "Serial console TX"
+  }
 };
 board["_css"] = """
+#board {
+  width: 528px;
+  height: 800px;
+  top: 0px;
+  left : 200px;
+  background-image: url(img/NRF52832DK.jpg);
+}
+#boardcontainer {
+  height: 900px;
+}
+
+#left {
+    top: 219px;
+    right: 466px;
+}
+#right {
+    top: 150px;
+    left: 466px;
+}
+
+.leftpin { height: 17px; }
+.rightpin { height: 17px; }
 """;
 
 def get_pins():
@@ -104,6 +135,16 @@ def get_pins():
   pinutils.findpin(pins, "PD29", True)["functions"]["ADC1_IN5"]=0;
   pinutils.findpin(pins, "PD30", True)["functions"]["ADC1_IN6"]=0;
   pinutils.findpin(pins, "PD31", True)["functions"]["ADC1_IN7"]=0;
+  # Make buttons and LEDs negated
+  pinutils.findpin(pins, "PD13", True)["functions"]["NEGATED"]=0;
+  pinutils.findpin(pins, "PD14", True)["functions"]["NEGATED"]=0;
+  pinutils.findpin(pins, "PD15", True)["functions"]["NEGATED"]=0;
+  pinutils.findpin(pins, "PD16", True)["functions"]["NEGATED"]=0;
+  pinutils.findpin(pins, "PD17", True)["functions"]["NEGATED"]=0;
+  pinutils.findpin(pins, "PD18", True)["functions"]["NEGATED"]=0;
+  pinutils.findpin(pins, "PD19", True)["functions"]["NEGATED"]=0;
+  pinutils.findpin(pins, "PD20", True)["functions"]["NEGATED"]=0;
+
   # everything is non-5v tolerant
   for pin in pins:
     pin["functions"]["3.3"]=0;

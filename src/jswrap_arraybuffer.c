@@ -24,14 +24,30 @@
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
 This is the built-in JavaScript class for array buffers.
+
+If you want to access arrays of differing types of data
+you may also find [/Reference#DataView](DataView) useful.
  */
 
 /*JSON{
   "type" : "class",
   "class" : "ArrayBufferView"
 }
-This is the built-in JavaScript class that is the prototype for Uint8Array / Float32Array / etc
- */
+This is the built-in JavaScript class that is the prototype for:
+
+* [Uint8Array](/Reference#Uint8Array)
+* [UintClamped8Array](/Reference#UintClamped8Array)
+* [Int8Array](/Reference#Int8Array)
+* [Uint16Array](/Reference#Uint16Array)
+* [Int16Array](/Reference#Int16Array)
+* [Uint32Array](/Reference#Uint32Array)
+* [Int32Array](/Reference#Int32Array)
+* [Float32Array](/Reference#Float32Array)
+* [Float64Array](/Reference#Float64Array)
+
+If you want to access arrays of differing types of data
+you may also find [DataView](/Reference#DataView) useful.
+*/
 
 /*JSON{
   "type" : "class",
@@ -40,9 +56,11 @@ This is the built-in JavaScript class that is the prototype for Uint8Array / Flo
   "check" : "jsvIsArrayBuffer(var) && var->varData.arraybuffer.type==ARRAYBUFFERVIEW_UINT8",
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
-This is the built-in JavaScript class for a typed array.
+This is the built-in JavaScript class for a typed array of 8 bit unsigned integers.
 
-Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays). 
+Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays).
+
+Arrays of this type include all the methods from [ArrayBufferView](/Reference#ArrayBufferView)
  */
 /*JSON{
   "type" : "class",
@@ -51,9 +69,11 @@ Instantiate this in order to efficiently store arrays of data (Espruino's normal
   "check" : "jsvIsArrayBuffer(var) && var->varData.arraybuffer.type==(ARRAYBUFFERVIEW_UINT8|ARRAYBUFFERVIEW_CLAMPED)",
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
-This is the built-in JavaScript class for a typed array.
+This is the built-in JavaScript class for a typed array of 8 bit unsigned integers that are automatically clamped to the range 0 to 255.
 
 Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays).
+
+Arrays of this type include all the methods from [ArrayBufferView](/Reference#ArrayBufferView)
  */
 /*JSON{
   "type" : "class",
@@ -62,9 +82,11 @@ Instantiate this in order to efficiently store arrays of data (Espruino's normal
   "check" : "jsvIsArrayBuffer(var) && var->varData.arraybuffer.type==ARRAYBUFFERVIEW_INT8",
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
-This is the built-in JavaScript class for a typed array.
+This is the built-in JavaScript class for a typed array of 8 bit signed integers.
 
-Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays). 
+Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays).
+
+Arrays of this type include all the methods from [ArrayBufferView](/Reference#ArrayBufferView)
  */
 /*JSON{
   "type" : "class",
@@ -73,9 +95,11 @@ Instantiate this in order to efficiently store arrays of data (Espruino's normal
   "check" : "jsvIsArrayBuffer(var) && var->varData.arraybuffer.type==ARRAYBUFFERVIEW_UINT16",
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
-This is the built-in JavaScript class for a typed array.
+This is the built-in JavaScript class for a typed array of 16 bit unsigned integers.
 
-Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays). 
+Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays).
+
+Arrays of this type include all the methods from [ArrayBufferView](/Reference#ArrayBufferView)
  */
 /*JSON{
   "type" : "class",
@@ -84,9 +108,11 @@ Instantiate this in order to efficiently store arrays of data (Espruino's normal
   "check" : "jsvIsArrayBuffer(var) && var->varData.arraybuffer.type==ARRAYBUFFERVIEW_INT16",
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
-This is the built-in JavaScript class for a typed array.
+This is the built-in JavaScript class for a typed array of 16 bit signed integers.
 
-Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays). 
+Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays).
+
+Arrays of this type include all the methods from [ArrayBufferView](/Reference#ArrayBufferView)
  */
 /*JSON{
   "type" : "class",
@@ -95,9 +121,11 @@ Instantiate this in order to efficiently store arrays of data (Espruino's normal
   "check" : "jsvIsArrayBuffer(var) && var->varData.arraybuffer.type==ARRAYBUFFERVIEW_UINT32",
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
-This is the built-in JavaScript class for a typed array.
+This is the built-in JavaScript class for a typed array of 32 bit unsigned integers.
 
-Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays). 
+Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays).
+
+Arrays of this type include all the methods from [ArrayBufferView](/Reference#ArrayBufferView)
  */
 /*JSON{
   "type" : "class",
@@ -106,9 +134,11 @@ Instantiate this in order to efficiently store arrays of data (Espruino's normal
   "check" : "jsvIsArrayBuffer(var) && var->varData.arraybuffer.type==ARRAYBUFFERVIEW_INT32",
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
-This is the built-in JavaScript class for a typed array.
+This is the built-in JavaScript class for a typed array of 32 bit signed integers.
 
-Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays). 
+Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays).
+
+Arrays of this type include all the methods from [ArrayBufferView](/Reference#ArrayBufferView)
  */
 /*JSON{
   "type" : "class",
@@ -117,9 +147,11 @@ Instantiate this in order to efficiently store arrays of data (Espruino's normal
   "check" : "jsvIsArrayBuffer(var) && var->varData.arraybuffer.type==ARRAYBUFFERVIEW_FLOAT32",
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
-This is the built-in JavaScript class for a typed array.
+This is the built-in JavaScript class for a typed array of 32 bit floating point values.
 
-Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays). 
+Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays).
+
+Arrays of this type include all the methods from [ArrayBufferView](/Reference#ArrayBufferView)
  */
 /*JSON{
   "type" : "class",
@@ -128,9 +160,11 @@ Instantiate this in order to efficiently store arrays of data (Espruino's normal
   "check" : "jsvIsArrayBuffer(var) && var->varData.arraybuffer.type==ARRAYBUFFERVIEW_FLOAT64",
   "not_real_object" : "Don't treat this as a real object - it's handled differently internally"
 }
-This is the built-in JavaScript class for a typed array.
+This is the built-in JavaScript class for a typed array of 64 bit floating point values.
 
-Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays). 
+Instantiate this in order to efficiently store arrays of data (Espruino's normal arrays store data in a map, which is inefficient for non-sparse arrays).
+
+Arrays of this type include all the methods from [ArrayBufferView](/Reference#ArrayBufferView)
  */
 
 
@@ -169,6 +203,16 @@ JsVar *jswrap_arraybuffer_constructor(JsVarInt byteLength) {
   jsvUnLock(arrData);
   return v;
 }
+
+/*JSON{
+  "type" : "property",
+  "class" : "ArrayBuffer",
+  "name" : "byteLength",
+  "generate_full" : "(JsVarInt)(parent->varData.arraybuffer.length)",
+  "return" : ["int","The Length in bytes"]
+}
+The length, in bytes, of the ArrayBuffer
+ */
 
 
 /*
@@ -338,7 +382,7 @@ JsVar *jswrap_typedarray_constructor(JsVarDataArrayBufferViewType type, JsVar *a
     return 0;
   }
   if (length==0) {
-    length = (JsVarInt)((jsvGetArrayBufferLength(arrayBuffer)-byteOffset) / JSV_ARRAYBUFFER_GET_SIZE(type)); 
+    length = ((JsVarInt)jsvGetArrayBufferLength(arrayBuffer)-byteOffset) / (JsVarInt)JSV_ARRAYBUFFER_GET_SIZE(type); 
     if (length<0) length=0;
   }
   JsVar *typedArr = jsvNewWithFlags(JSV_ARRAYBUFFER);
@@ -351,7 +395,7 @@ JsVar *jswrap_typedarray_constructor(JsVarDataArrayBufferViewType type, JsVar *a
     if (copyData) {
       // if we were given an array, populate this ArrayBuffer
       JsvIterator it;
-      jsvIteratorNew(&it, arr);
+      jsvIteratorNew(&it, arr, JSIF_DEFINED_ARRAY_ElEMENTS);
       while (jsvIteratorHasElement(&it)) {
         JsVar *idx = jsvIteratorGetKey(&it);
         if (jsvIsInt(idx)) {
@@ -417,7 +461,7 @@ void jswrap_arraybufferview_set(JsVar *parent, JsVar *arr, int offset) {
     return;
   }
   JsvIterator itsrc;
-  jsvIteratorNew(&itsrc, arr);
+  jsvIteratorNew(&itsrc, arr, JSIF_EVERY_ARRAY_ELEMENT);
   JsvArrayBufferIterator itdst;
   jsvArrayBufferIteratorNew(&itdst, parent, (size_t)offset);
 
@@ -477,7 +521,7 @@ JsVar *jswrap_arraybufferview_map(JsVar *parent, JsVar *funcVar, JsVar *thisVar)
 
   // now iterate
   JsvIterator it; // TODO: if we really are limited to ArrayBuffers, this could be an ArrayBufferIterator.
-  jsvIteratorNew(&it, parent);
+  jsvIteratorNew(&it, parent, JSIF_EVERY_ARRAY_ELEMENT);
   JsvArrayBufferIterator itdst;
   jsvArrayBufferIteratorNew(&itdst, array, 0);
 
@@ -518,7 +562,8 @@ JsVar *jswrap_arraybufferview_map(JsVar *parent, JsVar *funcVar, JsVar *thisVar)
   "name" : "indexOf",
   "generate" : "jswrap_array_indexOf",
   "params" : [
-    ["value","JsVar","The value to check for"]
+    ["value","JsVar","The value to check for"],
+    ["startIndex","int","(optional) the index to search from, or 0 if not specified"]
   ],
   "return" : ["JsVar","the index of the value in the array, or -1"]
 }
@@ -591,6 +636,46 @@ Execute `previousValue=initialValue` and then `previousValue = callback(previous
   "return_object" : "ArrayBufferView"
 }
 Fill this array with the given value, for every index `>= start` and `< end`
+ */
+/*JSON{
+  "type" : "method",
+  "class" : "ArrayBufferView",
+  "name" : "filter",
+  "ifndef" : "SAVE_ON_FLASH",
+  "generate" : "jswrap_array_filter",
+  "params" : [
+    ["function","JsVar","Function to be executed"],
+    ["thisArg","JsVar","if specified, the function is called with 'this' set to thisArg (optional)"]
+  ],
+  "return" : ["JsVar","An array containing the results"]
+}
+Return an array which contains only those elements for which the callback function returns 'true'
+ */
+/*JSON{
+  "type" : "method",
+  "class" : "ArrayBufferView",
+  "name" : "find",
+  "ifndef" : "SAVE_ON_FLASH",
+  "generate" : "jswrap_array_find",
+  "params" : [
+    ["function","JsVar","Function to be executed"]
+  ],
+  "return" : ["JsVar","The array element where `function` returns `true`, or `undefined`"]
+}
+Return the array element where `function` returns `true`, or `undefined` if it doesn't returns `true` for any element.
+ */
+/*JSON{
+  "type" : "method",
+  "class" : "ArrayBufferView",
+  "name" : "findIndex",
+  "ifndef" : "SAVE_ON_FLASH",
+  "generate" : "jswrap_array_findIndex",
+  "params" : [
+    ["function","JsVar","Function to be executed"]
+  ],
+  "return" : ["JsVar","The array element's index where `function` returns `true`, or `-1`"]
+}
+Return the array element's index where `function` returns `true`, or `-1` if it doesn't returns `true` for any element.
  */
 /*JSON{
   "type" : "method",

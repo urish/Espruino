@@ -16,13 +16,13 @@
 import pinutils;
 
 info = {
- 'name' : "PuckJS",
+ 'name' : "Puck.js",
  'link' :  [ "http://www.espruino.com/PuckJS" ],
  'default_console' : "EV_SERIAL1",
  'default_console_tx' : "D28",
  'default_console_rx' : "D29",
  'default_console_baudrate' : "9600",
- 'variables' : 2500, # How many variables are allocated for Espruino to use. RAM will be overflowed if this number is too high and code won't compile.
+ 'variables' : 2250, # How many variables are allocated for Espruino to use. RAM will be overflowed if this number is too high and code won't compile.
  'bootloader' : 1,
  'binary_name' : 'espruino_%v_puckjs.hex',
  'build' : {
@@ -31,18 +31,23 @@ info = {
      'BLUETOOTH',
      'NET',
      'GRAPHICS',
-     'CRYPTO',
+     'CRYPTO','SHA256','SHA512',
+     'AES',
      'NFC',
-     'NEOPIXEL'
+     'NEOPIXEL',
      #'HASHLIB'
      #'FILESYSTEM'
      #'TLS'
    ],
    'makefile' : [
      'DEFINES+=-DHAL_NFC_ENGINEERING_BC_FTPAN_WORKAROUND=1', # Looks like proper production nRF52s had this issue
+     'DEFINES+=-DCONFIG_GPIO_AS_PINRESET', # Allow the reset pin to work
      'DEFINES+=-DBLUETOOTH_NAME_PREFIX=\'"Puck.js"\'',
+     'DEFINES+=-DNFC_DEFAULT_URL=\'"https://puck-js.com/go"\'',
      'DFU_PRIVATE_KEY=targets/nrf5x_dfu/dfu_private_key.pem',
-     'DFU_SETTINGS=--application-version 0xff --hw-version 52 --sd-req 0x8C'
+     'DFU_SETTINGS=--application-version 0xff --hw-version 52 --sd-req 0x8C',
+     'INCLUDE += -I$(ROOT)/libs/puckjs',
+     'WRAPPERSOURCES += libs/puckjs/jswrap_puck.c'
    ]
  }
 };
@@ -60,10 +65,10 @@ chip = {
   'adc' : 1,
   'dac' : 0,
   'saved_code' : {
-    'address' : ((118 - 3) * 4096), # Bootloader takes pages 120-127, FS takes 118-119
+    'address' : ((118 - 10) * 4096), # Bootloader takes pages 120-127, FS takes 118-119
     'page_size' : 4096,
-    'pages' : 3,
-    'flash_available' : 512 - ((31 + 8 + 1 + 3)*4) # Softdevice uses 31 pages of flash, bootloader 8, FS 1, code 3. Each page is 4 kb.
+    'pages' : 10,
+    'flash_available' : 512 - ((31 + 8 + 2 + 10)*4) # Softdevice uses 31 pages of flash, bootloader 8, FS 2, code 10. Each page is 4 kb.
   },
 };
 
@@ -90,7 +95,7 @@ board = {
   'right2' : [ 'D15' ],
   '_notes' : {
     'D11' : "Capacitive sense. D12 is connected to this pin via a 1 MOhm resistor",
-    'D29' : "If pulled up to 1 on startup, D28 and D29 become Serial1",
+    'D28' : "If pulled up to 1 on startup, D28 and D29 become Serial1",
   }
 };
 

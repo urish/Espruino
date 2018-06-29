@@ -35,7 +35,8 @@ info = {
    'makefile' : [
      'DFU_PRIVATE_KEY=targets/nrf5x_dfu/ngbeacon_dfu_key.pem',
      'DEFINES+=-DBLUETOOTH_NAME_PREFIX=\'"ng-beacon"\'',
-     'DFU_SETTINGS=--application-version 0xff --hw-version 52 --sd-req 0x8C'
+     'DFU_SETTINGS=--application-version 0xff --hw-version 52 --sd-req 0x8C',
+     'WRAPPERSOURCES += libs/ngbeacon/jswrap_ngbeacon.c'
    ]
  }
 };
@@ -61,10 +62,8 @@ chip = {
 };
 
 devices = {
-  'BTN1' : { 'pin' : 'D17', 'inverted' : True, 'pinstate' : 'IN_PULLUP'},
-  'LED1':  { 'pin' : 'D26', 'inverted' : True },
-  'LED2':  { 'pin' : 'D15' },
-  'LED3':  { 'pin' : 'D14' },
+  'BTN1' : { 'pin' : 'D17', 'pinstate' : 'IN_PULLDOWN'}, # Pin negated in software
+  'LED1':  { 'pin' : 'D26' }, # Pin negated in software
   'RX_PIN_NUMBER' : { 'pin' : 'D8'},
   'TX_PIN_NUMBER' : { 'pin' : 'D9'},
   'CTS_PIN_NUMBER' : { 'pin' : 'D10'},
@@ -81,4 +80,7 @@ board["_css"] = """
 
 def get_pins():
   pins = pinutils.generate_pins(0,31) # 32 General Purpose I/O Pins.
+  # Make buttons and LEDs negated
+  pinutils.findpin(pins, "PD17", True)["functions"]["NEGATED"]=0
+  pinutils.findpin(pins, "PD26", True)["functions"]["NEGATED"]=0
   return pins

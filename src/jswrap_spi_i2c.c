@@ -91,6 +91,8 @@ May return undefined if no device can be found.
   ]
 }
 Set up this SPI port as an SPI Master.
+
+**Note:** When using Software SPI, the baud rate will be ignored - data is sent as fast as possible.
  */
 void jswrap_spi_setup(
     JsVar *parent, //!< The variable that is the class instance of this function.
@@ -368,7 +370,7 @@ void jswrap_spi_send4bit(JsVar *parent, JsVar *srcdata, int bit0, int bit1, Pin 
   } else if (jsvIsIterable(srcdata)) {
     jshInterruptOff();
     JsvIterator it;
-    jsvIteratorNew(&it, srcdata);
+    jsvIteratorNew(&it, srcdata, JSIF_EVERY_ARRAY_ELEMENT);
     while (jsvIteratorHasElement(&it)) {
       unsigned char in = (unsigned char)jsvIteratorGetIntegerValue(&it);
       jsspiSend4bit(device, in, bit0, bit1);
@@ -437,7 +439,7 @@ void jswrap_spi_send8bit(JsVar *parent, JsVar *srcdata, int bit0, int bit1, Pin 
   } else if (jsvIsIterable(srcdata)) {
     jshInterruptOff();
     JsvIterator it;
-    jsvIteratorNew(&it, srcdata);
+    jsvIteratorNew(&it, srcdata, JSIF_EVERY_ARRAY_ELEMENT);
     while (jsvIteratorHasElement(&it)) {
       unsigned char in = (unsigned char)jsvIteratorGetIntegerValue(&it);
       jsspiSend8bit(device, in, bit0, bit1);
@@ -472,7 +474,7 @@ All addresses are in 7 bit format. If you have an 8 bit address then you need to
 }
 Create a software I2C port. This has limited functionality (no baud rate), but it can work on any pins.
 
-Use `SPI.setup` to configure this port.
+Use `I2C.setup` to configure this port.
  */
 JsVar *jswrap_i2c_constructor() {
   return jsvNewObject();

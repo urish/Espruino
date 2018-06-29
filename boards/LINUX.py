@@ -17,18 +17,20 @@ import pinutils;
 info = {
  'name' : "Normal Linux Compile",
  'default_console' : "EV_USBSERIAL",
+ 'variables' :  0, # 0 = resizable variables, rather than fixed
  'binary_name' : 'espruino',
  'build' : {
    'libraries' : [
      'NET',
      'GRAPHICS',
      'FILESYSTEM',
-     'CRYPTO',
+     'CRYPTO','SHA256','SHA512',
      'TLS',
      'HASHLIB',
      'TELNET',
    ],
    'makefile' : [
+#     'DEFINES+=-DFLASH_64BITS_ALIGNMENT=1', For testing 64 bit flash writes
      'LINUX=1',
    ]
  }
@@ -37,8 +39,8 @@ chip = {
   'part' : "LINUX",
   'family' : "LINUX",
   'package' : "",
-  'ram' : -1,
-  'flash' : -1,
+  'ram' : 0,
+  'flash' : 256, # size of file used to fake flash memory (kb)
   'speed' : -1,
   'usart' : 6,
   'spi' : 3,

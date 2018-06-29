@@ -86,6 +86,47 @@ static char *authModeToString(wifi_auth_mode_t authMode) {
 
 
 /**
+ * Convert an wifi_cipher_type_t data type to a string value.
+ *
+static char *cipherTypeToString(wifi_cipher_type_t cipherType) {
+
+  switch(cipherType) {
+  case WIFI_CIPHER_TYPE_NONE:
+    return "NONE";
+  case WIFI_CIPHER_TYPE_WEP40:
+    return "WEP40";
+  case WIFI_CIPHER_TYPE_WEP104:
+    return "WEP104";
+  case WIFI_CIPHER_TYPE_TKIP:
+    return "TKIP";
+  case WIFI_CIPHER_TYPE_CCMP:
+    return "CCMP";
+  case WIFI_CIPHER_TYPE_TKIP_CCMP:
+    return "TKIP+CCMP";
+  }
+  return "unknown";
+} // End of authModeToString
+*/
+
+
+/**
+ * Convert an wifi_second_chan_t data type to a string value.
+ */
+static char *htModeToString(wifi_second_chan_t htMode) {
+
+  switch(htMode) {
+  case WIFI_SECOND_CHAN_NONE:
+    return "HT20";
+  case WIFI_SECOND_CHAN_ABOVE:
+    return "HT40+";
+  case WIFI_SECOND_CHAN_BELOW:
+    return "HT40-";
+  }
+  return "unknown";
+} // End of htModeToString
+
+
+/**
  * Convert a Wifi reason code to a string representation.
  */
 static char *wifiReasonToString(uint8_t reason) {
@@ -205,19 +246,16 @@ static void scanCB() {
       jsvObjectSetChildAndUnLock(jsCurrentAccessPoint, "authMode", jsvNewFromString(authModeToString(list[i].authmode)));
 
       // The SSID may **NOT** be NULL terminated ... so handle that.
-      char ssid[32 + 1];
-      strncpy((char *)ssid, list[i].ssid, 32);
-      ssid[32] = '\0';
-      jsvObjectSetChildAndUnLock(jsCurrentAccessPoint, "ssid", jsvNewFromString(ssid));
-
-          /*
-          char macAddrString[6*3 + 1];
-          os_sprintf(macAddrString, macFmt,
-            bssInfo->bssid[0], bssInfo->bssid[1], bssInfo->bssid[2],
-            bssInfo->bssid[3], bssInfo->bssid[4], bssInfo->bssid[5]);
-          jsvObjectSetChildAndUnLock(jsCurrentAccessPoint, "mac", jsvNewFromString(macAddrString));
-          */
-
+      char temp[32 + 1];
+      strncpy((char *)temp, list[i].ssid, 32);
+      temp[32] = '\0';
+      jsvObjectSetChildAndUnLock(jsCurrentAccessPoint, "ssid", jsvNewFromString(temp));
+      sprintf(temp, MACSTR, MAC2STR(list[i].bssid));
+      jsvObjectSetChildAndUnLock(jsCurrentAccessPoint, "mac", jsvNewFromString(temp));
+      sprintf(temp, "%d", list[i].primary);
+      jsvObjectSetChildAndUnLock(jsCurrentAccessPoint, "channel", jsvNewFromString(temp));
+      // Can't find a flag for this?  http://esp-idf.readthedocs.io/en/latest/api-reference/wifi/esp_wifi.html?highlight=wifi_ap_record_t
+      //jsvObjectSetChildAndUnLock(jsCurrentAccessPoint, "isHidden", jsvNewFromBool(list[i].ssid_hidden));
       // Add the new record to the array
       jsvArrayPush(jsAccessPointArray, jsCurrentAccessPoint);
       jsvUnLock(jsCurrentAccessPoint);
@@ -524,6 +562,7 @@ static void sendWifiCompletionCB(
   "type":"init",
   "generate":"jswrap_esp32_wifi_soft_init"
 }
+*/
 
 /**
  * Perform a soft initialization of ESP32 networking.
@@ -913,7 +952,7 @@ JsVar *jswrap_wifi_getStatus(JsVar *jsCallback) {
   UNUSED(jsCallback);
   // We have to determine the following information:
   //
-  // - [    ] The status of the station interface
+  // - [done] The status of the station interface
   // - [    ] The status of the access point interface
   // - [done] The current mode of operation
   // - [    ] The physical modulation
@@ -926,25 +965,6 @@ JsVar *jswrap_wifi_getStatus(JsVar *jsCallback) {
   // Get the current mode of operation.
   wifi_mode_t mode;
   esp_wifi_get_mode(&mode);
-
-  char *modeStr;
-  switch(mode) {
-  case WIFI_MODE_NULL:
-    modeStr = "off";
-    break;
-  case WIFI_MODE_AP:
-    modeStr = "ap";
-    break;
-  case WIFI_MODE_STA:
-    modeStr = "sta";
-    break;
-  case WIFI_MODE_APSTA:
-    modeStr ="sta+ap";
-    break;
-  default:
-    modeStr = "unknown";
-    break;
-  }
 
   // Get the current power save type
   wifi_ps_type_t psType;
@@ -965,12 +985,55 @@ JsVar *jswrap_wifi_getStatus(JsVar *jsCallback) {
   JsVar *jsWiFiStatus = jsvNewObject();
   if (g_isStaConnected) {
     jsvObjectSetChildAndUnLock(jsWiFiStatus, "station", jsvNewFromString("connected"));
+
+    if (mode == WIFI_MODE_STA || mode == WIFI_MODE_APSTA) {
+      wifi_ap_record_t ap_info;
+      esp_wifi_sta_get_ap_info(&ap_info);
+      char buf[35];
+
+      // SSID of AP
+      strncpy(buf, ap_info.ssid, sizeof(buf));
+      buf[34] = 0;
+      jsvObjectSetChildAndUnLock(jsWiFiStatus, "ssid", jsvNewFromString(buf));
+
+      // MAC address of AP
+      sprintf(buf, MACSTR, MAC2STR(ap_info.bssid));
+      buf[18] = 0;
+      jsvObjectSetChildAndUnLock(jsWiFiStatus, "bssid", jsvNewFromString(buf));
+
+      // Channel of AP
+      jsvObjectSetChildAndUnLock(jsWiFiStatus, "channel", jsvNewFromInteger(ap_info.primary));
+
+      // RSSI
+      jsvObjectSetChildAndUnLock(jsWiFiStatus, "rssi", jsvNewFromInteger(ap_info.rssi));
+
+      // HT mode
+      jsvObjectSetChildAndUnLock(jsWiFiStatus, "htMode",
+        jsvNewFromString(htModeToString(ap_info.second)));
+
+      // Auth mode
+      jsvObjectSetChildAndUnLock(jsWiFiStatus, "authMode",
+        jsvNewFromString(authModeToString(g_lastEventStaConnected.authmode)));
+
+      /* Later version
+       * // Pairwise cipher
+       * jsvObjectSetChildAndUnLock(jsWiFiStatus, "pairwiseCipher",
+       *   jsvNewFromString(cipherTypeToString(ap_info.pairwise_cipher)));
+       *
+       * // Group cipher
+       * jsvObjectSetChildAndUnLock(jsWiFiStatus, "groupCipher",
+       *   jsvNewFromString(cipherTypeToString(ap_info.group_cipher)));
+       */
+    }
+
   } else {
     jsvObjectSetChildAndUnLock(jsWiFiStatus, "station",
         jsvNewFromString(wifiReasonToString(g_lastEventStaDisconnected.reason)));
   }
-  jsvObjectSetChildAndUnLock(jsWiFiStatus, "mode", jsvNewFromString(modeStr));
+  jsvObjectSetChildAndUnLock(jsWiFiStatus, "mode",
+    jsvNewFromString(wifiModeToString(mode)));
   jsvObjectSetChildAndUnLock(jsWiFiStatus, "powersave", jsvNewFromString(psTypeStr));
+
   return jsWiFiStatus;
 } // End of jswrap_wifi_getStatus
 
@@ -1134,9 +1197,11 @@ static JsVar *getIPInfo(JsVar *jsCallback, tcpip_adapter_if_t interface) {
 
   // Schedule callback if a function was provided
   if (jsvIsFunction(jsCallback)) {
-    JsVar *params[1];
-    params[0] = jsIpInfo;
-    jsiQueueEvents(NULL, jsCallback, params, 1);
+    JsVar *params[2];
+    params[0] = jsvNewWithFlags(JSV_NULL);
+    params[1] = jsIpInfo;
+    jsiQueueEvents(NULL, jsCallback, params, 2);
+    jsvUnLock(params[0]);
   }
 
   return jsIpInfo;
@@ -1171,27 +1236,14 @@ JsVar *jswrap_wifi_getHostname(JsVar *jsCallback) {
 }
 
 void jswrap_wifi_setHostname(
-    JsVar *jsHostname //!< The hostname to set for device.
+    JsVar *jsHostname, //!< The hostname to set for device.
+    JsVar *jsCallback
 ) {
   UNUSED(jsHostname);
   jsError( "jswrap_wifi_setHostname - Not implemented");
 }
 
-
-/*JSON{
-  "type"     : "staticmethod",
-  "class"    : "ESP32",
-  "name"     : "ping",
-  "generate" : "jswrap_ESP32_ping",
-  "params"   : [
-    ["ipAddr", "JsVar", "A string representation of an IP address."],
-    ["pingCallback", "JsVar", "Optional callback function."]
-  ]
-}
-Perform a network ping request. The parameter can be either a String or a numeric IP address.
-**Note:** This function should probably be removed, or should it be part of the wifi library?
-*/
-void jswrap_ESP32_ping(
+void jswrap_wifi_ping(
     JsVar *ipAddr,      //!< A string or integer representation of an IP address.
     JsVar *pingCallback //!< Optional callback function.
 ) {
