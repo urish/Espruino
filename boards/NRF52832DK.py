@@ -139,11 +139,11 @@ def get_pins():
   pinutils.findpin(pins, "PD13", True)["functions"]["NEGATED"]=0;
   pinutils.findpin(pins, "PD14", True)["functions"]["NEGATED"]=0;
   pinutils.findpin(pins, "PD15", True)["functions"]["NEGATED"]=0;
-  pinutils.findpin(pins, "PD16", True)["functions"]["NEGATED"]=0;
-  pinutils.findpin(pins, "PD17", True)["functions"]["NEGATED"]=0;
-  pinutils.findpin(pins, "PD18", True)["functions"]["NEGATED"]=0;
-  pinutils.findpin(pins, "PD19", True)["functions"]["NEGATED"]=0;
-  pinutils.findpin(pins, "PD20", True)["functions"]["NEGATED"]=0;
+  #pinutils.findpin(pins, "PD16", True)["functions"]["NEGATED"]=0;
+  #pinutils.findpin(pins, "PD17", True)["functions"]["NEGATED"]=0;
+  #pinutils.findpin(pins, "PD18", True)["functions"]["NEGATED"]=0;
+  #pinutils.findpin(pins, "PD19", True)["functions"]["NEGATED"]=0;
+  #pinutils.findpin(pins, "PD20", True)["functions"]["NEGATED"]=0;
 
   # everything is non-5v tolerant
   for pin in pins:
