@@ -31,6 +31,17 @@
             Enable E.setTimeZone on boards with very little flash memory
             Lower saved code area to 2k on micro:bit (from 3)
             Remove RGB colour handling in setColor on devices with low flash
+            Reduce available variable count on STM32VL - we were too low on RAM
+            Added Graphics.asBMP/asURL/dump - allowing easy debugging of Graphics via IDE
+            Allow '.then' on already-resolved promise (fix #1476)
+            Stop atob adding trailing 0s when strings are not a multiple of 3 long
+            Reconstruct start and end newlines when dumping multi-line functions  
+            Fix regression parsing methods in classes on embedded (fix #1479)
+            nRF5x: Add options argument to NRF.connect and BluetoothDevice.gatt.connect, allowing a connection interval to be specified
+            nRF5x: Start renegotiating speed after 0.1ms, not 5s. Massively improves connect speed.
+            nRF5x: Now queue up to 5 UART TX packets per transmit interval (was 1 previously)
+            nRF52: Add Dynamic Interval Adjustment - default to 2x connection speed, but idle at 10x slower if not used for 1 minute
+            nRF5x: Add NRF.setConnectionInterval() to allow connection speed to be set manually
 
      1v99 : Increase jslMatch error buffer size to handle "UNFINISHED TEMPLATE LITERAL" string (#1426)
             nRF5x: Make FlashWrite cope with flash writes > 4k

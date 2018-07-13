@@ -405,8 +405,8 @@ If a device is connected to Espruino, disconnect from it.
 */
 void jswrap_nrf_bluetooth_disconnect() {
   uint32_t err_code;
-  if (jsble_has_simple_connection()) {
-    err_code = jsble_disconnect(m_conn_handle);
+  if (jsble_has_peripheral_connection()) {
+    err_code = jsble_disconnect(m_peripheral_conn_handle);
     jsble_check_error(err_code);
   }
 }
@@ -1210,6 +1210,10 @@ void jswrap_nrf_bluetooth_updateServices(JsVar *data) {
   uint32_t err_code;
   bool ok = true;
 
+#ifdef NRF5X
+  jsble_peripheral_activity(); // flag that we've been busy
+#endif
+
   if (jsvIsObject(data)) {
     JsvObjectIterator it;
     jsvObjectIteratorNew(&it, data);
@@ -1257,10 +1261,10 @@ void jswrap_nrf_bluetooth_updateServices(JsVar *data) {
               gatts_value.len = vLen;
               gatts_value.offset = 0;
               gatts_value.p_value = (uint8_t*)vPtr;
-              err_code = sd_ble_gatts_value_set(m_conn_handle, char_handle, &gatts_value);
+              err_code = sd_ble_gatts_value_set(m_peripheral_conn_handle, char_handle, &gatts_value);
               if (jsble_check_error(err_code)) {
                 ok = false;
-              } if ((notification_requested || indication_requested) && jsble_has_simple_connection()) {
+              } if ((notification_requested || indication_requested) && jsble_has_peripheral_connection()) {
                 // Notify/indicate connected clients if necessary
                 memset(&hvx_params, 0, sizeof(hvx_params));
                 uint16_t len = (uint16_t)vLen;
@@ -1270,7 +1274,7 @@ void jswrap_nrf_bluetooth_updateServices(JsVar *data) {
                 hvx_params.p_len = &len;
                 hvx_params.p_data = (uint8_t*)vPtr;
 
-                err_code = sd_ble_gatts_hvx(m_conn_handle, &hvx_params);
+                err_code = sd_ble_gatts_hvx(m_peripheral_conn_handle, &hvx_params);
                 if ((err_code != NRF_SUCCESS)
                   && (err_code != NRF_ERROR_INVALID_STATE)
 #if NRF_SD_BLE_API_VERSION<5
@@ -1649,6 +1653,10 @@ void jswrap_nrf_bluetooth_setTxPower(JsVarInt pwr) {
       ["lowPower","bool","Whether the connection is low power or not"]
     ]
 }
+
+**THIS IS DEPRECATED** - please use `NRF.setConnectionInterval` for
+peripheral and `NRF.connect(addr, options)`/`BluetoothRemoteGATTServer.connect(options)`
+for central connections.
 
 This sets the connection parameters - these affect the transfer speed and
 power usage when the device is connected.
@@ -2176,7 +2184,8 @@ JsVar *jswrap_nrf_bluetooth_requestDevice(JsVar *options) {
     "#if" : "defined(NRF52) || defined(ESP32)",
     "generate" : "jswrap_nrf_bluetooth_connect",
     "params" : [
-      ["mac","JsVar","The MAC address to connect to"]
+      ["mac","JsVar","The MAC address to connect to"],
+      ["options","JsVar","(Espruino-specific) An object of connection options (see `BluetoothRemoteGATTServer.connect` for full details)"]
     ],
     "return" : ["JsVar", "A Promise that is resolved (or rejected) when the connection is complete" ]
 }
@@ -2188,6 +2197,9 @@ NRF.connect("aa:bb:cc:dd:ee").then(function(server) {
   // ...
 });
 ```
+
+This has the same effect as calling `BluetoothDevice.gatt.connect` on a `BluetoothDevice` requested
+using `NRF.requestDevice`. It just allows you to specify the address directly (without having to scan).
 
 You can use it as follows - this would connect to another Puck device and turn its LED on:
 
@@ -2212,7 +2224,7 @@ to use an address string of the form `"aa:bb:cc:dd:ee random"` rather than just
 `"aa:bb:cc:dd:ee"`. If you scan for devices with `NRF.findDevices`/`NRF.setScan` then
 addresses are already reported in the correct format.
 */
-JsVar *jswrap_nrf_bluetooth_connect(JsVar *mac) {
+JsVar *jswrap_nrf_bluetooth_connect(JsVar *mac, JsVar *options) {
 #if CENTRAL_LINK_COUNT>0
   JsVar *device = jspNewObject(0, "BluetoothDevice");
   if (!device) return 0;
@@ -2220,7 +2232,7 @@ JsVar *jswrap_nrf_bluetooth_connect(JsVar *mac) {
   JsVar *gatt = jswrap_BluetoothDevice_gatt(device);
   jsvUnLock(device);
   if (!gatt) return 0;
-  JsVar *promise = jswrap_nrf_BluetoothRemoteGATTServer_connect(gatt);
+  JsVar *promise = jswrap_nrf_BluetoothRemoteGATTServer_connect(gatt, options);
   jsvUnLock(gatt);
   return promise;
 #else
@@ -2251,6 +2263,60 @@ remembered after power-on (you'll have to add it to `onInit()`.
 void jswrap_nrf_setWhitelist(bool whitelist) {
 #if PEER_MANAGER_ENABLED
   jsble_central_setWhitelist(whitelist);
+#endif
+}
+
+/*JSON{
+    "type" : "staticmethod",
+    "class" : "NRF",
+    "name" : "setConnectionInterval",
+    "ifdef" : "NRF52",
+    "generate" : "jswrap_nrf_setConnectionInterval",
+    "params" : [
+      ["interval","JsVar","The connection interval to use (see below)"]
+    ]
+}
+When connected, Bluetooth LE devices communicate at a set interval.
+Lowering the interval (eg. more packets/second) means a lower delay when
+sending data, higher bandwidth, but also more power consumption.
+
+By default, when connected as a peripheral Espruino automatically adjusts the
+connection interval. When connected it's as fast as possible (7.5ms) but when idle
+for over a minute it drops to 200ms. On continued activity (>1 BLE operation) the
+interval is raised to 7.5ms again.
+
+The options for `interval` are:
+
+* `undefined` / `"auto"` : (default) automatically adjust connection interval
+* `100` : set min and max connection interval to the same number (between 7.5ms and 4000ms)
+* `{minInterval:20, maxInterval:100}` : set min and max connection interval as a range
+
+This configuration is not remembered during a `save()` - you will have to
+re-set it via `onInit`.
+
+**Note:** If connecting to another device (as Central), you can use
+an extra argument to `NRF.connect` or `BluetoothRemoteGATTServer.connect`
+to specify a connection interval.
+
+**Note:** This overwrites any changes imposed by the deprecated `NRF.setLowPowerConnection`
+*/
+void jswrap_nrf_setConnectionInterval(JsVar *interval) {
+#if NRF52
+  if (jsvIsUndefined(interval) || jsvIsStringEqual(interval,"auto")) {
+    // allow automatic interval setting
+    bleStatus &= ~BLE_DISABLE_DYNAMIC_INTERVAL;
+  } else if (jsvIsNumeric(interval)) {
+    // disable auto interval
+    bleStatus |= BLE_DISABLE_DYNAMIC_INTERVAL;
+    JsVarFloat f = jsvGetFloat(interval);
+    jsble_check_error(jsble_set_periph_connection_interval(f,f));
+  } else if (jsvIsObject(interval)) {
+    // disable auto interval
+    bleStatus |= BLE_DISABLE_DYNAMIC_INTERVAL;
+    JsVarFloat min = jsvGetFloatAndUnLock(jsvObjectGetChild(interval,"minInterval",0));
+    JsVarFloat max = jsvGetFloatAndUnLock(jsvObjectGetChild(interval,"maxInterval",0));
+    jsble_check_error(jsble_set_periph_connection_interval(min, max));
+  }
 #endif
 }
 
@@ -2312,25 +2378,52 @@ JsVar *jswrap_BluetoothDevice_gatt(JsVar *parent) {
     "name" : "connect",
     "#if" : "defined(NRF52) || defined(ESP32)",
     "generate" : "jswrap_nrf_BluetoothRemoteGATTServer_connect",
+    "params" : [
+      ["options","JsVar","(Espruino-specific) An object of connection options (see below)"]
+    ],
     "return" : ["JsVar", "A Promise that is resolved (or rejected) when the connection is complete" ]
 }
 Connect to a BLE device - returns a promise,
 the argument of which is the `BluetoothRemoteGATTServer` connection.
 
 See [`NRF.requestDevice`](/Reference#l_NRF_requestDevice) for usage examples.
+
+`options` is an optional object containing:
+
+```
+{
+   minInterval // min connection interval in milliseconds, 7.5 ms to 4 s
+   maxInterval // max connection interval in milliseconds, 7.5 ms to 4 s
+}
+```
+
+By default the interval is 20-200ms (or 500-1000ms if `NRF.setLowPowerConnection(true)` was called.
+During connection Espruino negotiates with the other device to find a common interval that can be
+used.
+
+For instance calling:
+
+```
+NRF.requestDevice({ filters: [{ namePrefix: 'Pixl.js' }] }).then(function(device) {
+  return device.gatt.connect({minInterval:7.5, maxInterval:7.5});
+}).then(function(g) {
+```
+
+will force the connection to use the fastest connection interval possible (as long as the device
+at the other end supports it).
 */
 #if CENTRAL_LINK_COUNT>0
-static void _jswrap_nrf_bluetooth_central_connect(JsVar *addr) {
+static void _jswrap_nrf_bluetooth_central_connect(JsVar *addr, JsVar *options) {
   // this function gets called on idle - just to make it less
   // likely we get connected while in the middle of executing stuff
   ble_gap_addr_t peer_addr;
   // this should be ok since we checked in jswrap_nrf_BluetoothRemoteGATTServer_connect
   if (!bleVarToAddr(addr, &peer_addr)) return;
-  jsble_central_connect(peer_addr);
+  jsble_central_connect(peer_addr, options);
 }
 #endif
 
-JsVar *jswrap_nrf_BluetoothRemoteGATTServer_connect(JsVar *parent) {
+JsVar *jswrap_nrf_BluetoothRemoteGATTServer_connect(JsVar *parent, JsVar *options) {
 #if CENTRAL_LINK_COUNT>0
 
   JsVar *device = jsvObjectGetChild(parent, "device", 0);
@@ -2346,9 +2439,10 @@ JsVar *jswrap_nrf_BluetoothRemoteGATTServer_connect(JsVar *parent) {
 
   JsVar *promise = 0;
   if (bleNewTask(BLETASK_CONNECT, parent/*BluetoothRemoteGATTServer*/)) {
-    JsVar *fn = jsvNewNativeFunction((void (*)(void))_jswrap_nrf_bluetooth_central_connect, JSWAT_VOID|(JSWAT_JSVAR<<JSWAT_BITS));
+    JsVar *fn = jsvNewNativeFunction((void (*)(void))_jswrap_nrf_bluetooth_central_connect, JSWAT_VOID|(JSWAT_JSVAR<<JSWAT_BITS)|(JSWAT_JSVAR<<(2*JSWAT_BITS)));
     if (fn) {
-      jsiQueueEvents(0, fn, &addr, 1);
+      JsVar *args[] = {addr, options};
+      jsiQueueEvents(0, fn, args, 2);
       jsvUnLock(fn);
       promise = jsvLockAgainSafe(blePromise);
     }
